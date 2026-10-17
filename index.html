@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fold Communicator</title>
+<meta name="description" content="Fold Communicator: an interactive 3D render and dimension sheet for a concept foldable phone with a physical keyboard.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#efece7; --surface:#f7f5f1; --ink:#1c1d20; --muted:#6a6b6f; --line:rgba(28,29,32,.13);
+    --accent:#2f8f9c; --dim:#2f8f9c; --part:#1c1d20; --partfill:rgba(28,29,32,.04); --screen:rgba(28,29,32,.10);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#141518; --surface:#1c1e22; --ink:#eceae6; --muted:#9c9da2; --line:rgba(236,234,230,.14);
+      --accent:#67c6d4; --dim:#67c6d4; --part:#eceae6; --partfill:rgba(236,234,230,.05); --screen:rgba(236,234,230,.12);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#141518; --surface:#1c1e22; --ink:#eceae6; --muted:#9c9da2; --line:rgba(236,234,230,.14);
+    --accent:#67c6d4; --dim:#67c6d4; --part:#eceae6; --partfill:rgba(236,234,230,.05); --screen:rgba(236,234,230,.12);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+
+  /* ---------- viewer ---------- */
+  #viewer{position:relative;height:100vh;height:100svh;min-height:520px;overflow:hidden;color:#1c1d20;
+    background:radial-gradient(120% 95% at 50% 40%,#f5f3ef 0%,#e6e3de 55%,#d3cfc8 100%)}
+  #viewer.dark{color:#eceae6;background:radial-gradient(120% 95% at 50% 40%,#2a2d31 0%,#16181b 55%,#0a0b0c 100%)}
+  #mount{position:absolute;inset:0;cursor:grab;touch-action:pan-y}
+  .hud{position:absolute;pointer-events:none}
+  .hud-tl{left:28px;top:24px;display:flex;flex-direction:column;gap:4px}
+  .hud-tl h1{margin:0;font-size:17px;font-weight:600;letter-spacing:.005em}
+  .hud-tl p{margin:0;font:400 11px 'IBM Plex Mono',monospace;opacity:.6}
+  .hud-tr{right:28px;top:26px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;font:400 11px 'IBM Plex Mono',monospace}
+  .hud-tr #state{font-weight:500;font-size:12px}
+  .hud-tr #dims{font-size:13px;font-weight:500}
+  .hud-tr .k{opacity:.55}
+  .bar{position:absolute;left:0;right:0;bottom:22px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;padding:0 16px;pointer-events:none}
+  .pill{display:flex;align-items:center;gap:2px;padding:4px;border-radius:999px;background:rgba(128,128,128,.14);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);pointer-events:auto}
+  .pill button{font:500 12px 'IBM Plex Sans',sans-serif;color:inherit;background:transparent;border:0;border-radius:999px;padding:8px 14px;cursor:pointer;min-height:34px}
+  .pill button:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
+  .pill button.on{background:color-mix(in srgb,currentColor 15%,transparent)}
+  .pill label{display:flex;align-items:center;gap:10px;padding:4px 12px;font:400 11px 'IBM Plex Mono',monospace}
+  .pill input[type=range]{width:140px;accent-color:currentColor;cursor:pointer}
+  .side{position:absolute;right:20px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;pointer-events:auto}
+  .side .pill{flex-direction:column;padding:4px}
+  .side .pill button{width:34px;padding:0;font-size:16px}
+  .swatches{display:flex;flex-direction:column;gap:8px;align-items:center;padding:10px 7px}
+  .sw{width:22px;height:22px;border-radius:50%;border:2px solid transparent;padding:0;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+  .sw[aria-pressed="true"]{border-color:currentColor}
+  .hint{position:absolute;left:28px;bottom:84px;font:400 11px 'IBM Plex Mono',monospace;opacity:.5;pointer-events:none}
+  details.tweaks{position:absolute;left:24px;top:84px;font:400 12px 'IBM Plex Sans',sans-serif;pointer-events:auto}
+  details.tweaks summary{cursor:pointer;list-style:none;padding:7px 14px;border-radius:999px;background:rgba(128,128,128,.14);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:inline-block;font-weight:500}
+  details.tweaks summary::-webkit-details-marker{display:none}
+  details.tweaks .panel{margin-top:8px;padding:12px 14px;border-radius:14px;background:rgba(128,128,128,.14);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:flex;flex-direction:column;gap:9px;min-width:190px}
+  details.tweaks label{display:flex;align-items:center;gap:8px;cursor:pointer}
+  details.tweaks .row{display:flex;gap:8px;align-items:center}
+  .acc{width:18px;height:18px;border-radius:50%;border:2px solid transparent;padding:0;cursor:pointer}
+  .acc[aria-pressed="true"]{border-color:currentColor}
+  .scroll-cue{position:absolute;left:50%;bottom:-2px;transform:translateX(-50%);font:400 11px 'IBM Plex Mono',monospace;opacity:.45;text-decoration:none;padding:4px 10px}
+  #nogl[hidden]{display:none}
+  #nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+
+  /* ---------- page sections ---------- */
+  main{max-width:1080px;margin:0 auto;padding:72px 24px 48px}
+  section{margin-bottom:84px}
+  .eyebrow{font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+  h2{font-size:30px;font-weight:600;letter-spacing:-.01em;margin:0 0 10px;line-height:1.2}
+  h3{font-size:18px;font-weight:600;margin:34px 0 10px}
+  .lede{color:var(--muted);max-width:62ch;margin:0 0 30px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px}
+  .tile .v{font:500 30px/1.1 'IBM Plex Mono',monospace;letter-spacing:-.02em}
+  .tile .v small{font-size:14px;color:var(--muted);margin-left:3px}
+  .tile .l{font-size:13px;color:var(--muted);margin-top:6px}
+
+  .drawings{display:grid;grid-template-columns:1.05fr 1fr;gap:16px;margin-top:16px}
+  .drawing{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0}
+  .drawing figcaption{font:500 12px 'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:10px}
+  .drawing svg{width:100%;height:auto;display:block}
+  .stack{display:flex;flex-direction:column;gap:16px}
+  svg .part{fill:var(--partfill);stroke:var(--part);stroke-width:.35}
+  svg .thin{fill:none;stroke:var(--part);stroke-width:.25;opacity:.55}
+  svg .scr{fill:var(--screen);stroke:var(--part);stroke-width:.25}
+  svg .key{fill:var(--part);opacity:.75}
+  svg .dl{stroke:var(--dim);stroke-width:.3;fill:none}
+  svg .ext{stroke:var(--dim);stroke-width:.2;opacity:.6;stroke-dasharray:.8 .8}
+  svg .dt{fill:var(--dim);font:500 3.6px 'IBM Plex Mono',monospace}
+  svg .lab{fill:var(--muted);font:400 3px 'IBM Plex Sans',sans-serif}
+  svg.big .lab{font-size:4.6px}
+  svg.big .dt{font-size:5.4px}
+
+  .tables{display:grid;grid-template-columns:1fr 1fr;gap:16px 28px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  caption{text-align:left;font-weight:600;font-size:15px;padding:0 0 8px}
+  th,td{text-align:left;padding:8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-weight:400;color:var(--muted);padding-right:14px}
+  td{font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:right;white-space:nowrap}
+  td.wrap{white-space:normal}
+  .note{font-size:13px;color:var(--muted);margin:10px 0 0}
+  ul.plain{margin:0;padding-left:18px;font-size:14px}
+  ul.plain li{margin:4px 0}
+
+  .finishes{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .finish{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;text-align:left;color:inherit;font:inherit}
+  .finish:hover{border-color:var(--accent)}
+  .finish .chips{display:flex;margin-bottom:12px}
+  .finish .chips span{width:30px;height:30px;border-radius:50%;margin-right:-8px;box-shadow:0 0 0 2px var(--surface)}
+  .finish b{display:block;font-weight:600}
+  .finish .hex{font:400 11px 'IBM Plex Mono',monospace;color:var(--muted);margin-top:4px;line-height:1.6}
+
+  .disclaimer{border-top:1px solid var(--line);padding-top:24px;font-size:13px;color:var(--muted)}
+  .disclaimer p{max-width:72ch;margin:0 0 8px}
+
+  @media (max-width:820px){
+    .drawings,.tables{grid-template-columns:1fr}
+    .side{right:12px;top:auto;bottom:150px;transform:none}
+  }
+  .drawings>*,.tables>*,.tiles>*{min-width:0}
+  @media (max-width:560px){
+    .hud-tl{left:16px;top:16px;right:16px}
+    .hud-tr{left:16px;right:auto;top:auto;bottom:128px;align-items:flex-start}
+    td{white-space:normal}
+    .hint{display:none}
+    details.tweaks{left:16px;top:86px}
+    .pill button{padding:8px 11px}
+    .pill input[type=range]{width:110px}
+    main{padding:56px 16px 40px}
+    h2{font-size:25px}
+    .tile .v{font-size:25px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ interactive render ============ -->
+<div id="viewer">
+  <div id="mount" aria-label="3D render of the Fold Communicator. Drag to rotate."></div>
+  <div id="nogl" hidden>This browser could not start 3D graphics (WebGL). The dimension sheet below still works.</div>
+
+  <header class="hud hud-tl">
+    <h1>Fold Communicator</h1>
+    <p>Concept · Clicks Communicator-style front × Galaxy Z Fold-style hinge</p>
+  </header>
+
+  <div class="hud hud-tr" aria-live="polite">
+    <div id="state">Folded</div>
+    <div id="dims">81.9 × 123.9 × 12.5 mm</div>
+    <div class="k">width × height × thickness</div>
+  </div>
+
+  <details class="tweaks">
+    <summary>Options</summary>
+    <div class="panel">
+      <label><input type="checkbox" id="t-backlight" checked> Key backlight</label>
+      <label><input type="checkbox" id="t-rotate"> Auto-rotate</label>
+      <label><input type="checkbox" id="t-backdrop"> Dark backdrop</label>
+      <label><input type="checkbox" id="t-single"> Single-pane inner screen</label>
+      <div class="row"><span style="opacity:.7">Screen accent</span>
+        <button class="acc" data-accent="#67c6d4" aria-pressed="true" style="background:#67c6d4" aria-label="Teal accent"></button>
+        <button class="acc" data-accent="#d98a3d" aria-pressed="false" style="background:#d98a3d" aria-label="Orange accent"></button>
+        <button class="acc" data-accent="#7f8bff" aria-pressed="false" style="background:#7f8bff" aria-label="Violet accent"></button>
+        <button class="acc" data-accent="#5fd39a" aria-pressed="false" style="background:#5fd39a" aria-label="Green accent"></button>
+      </div>
+    </div>
+  </details>
+
+  <div class="side">
+    <div class="pill swatches" aria-label="Finish">
+      <button class="sw" data-finish="porcelain" aria-pressed="true"  style="background:#efece6" title="Porcelain" aria-label="Porcelain"></button>
+      <button class="sw" data-finish="graphite"  aria-pressed="false" style="background:#2c2d30" title="Graphite" aria-label="Graphite"></button>
+      <button class="sw" data-finish="sage"      aria-pressed="false" style="background:#c2cabb" title="Sage" aria-label="Sage"></button>
+      <button class="sw" data-finish="clay"      aria-pressed="false" style="background:#dbc6b4" title="Clay" aria-label="Clay"></button>
+      <button class="sw" data-finish="cobalt"    aria-pressed="false" style="background:#34465f" title="Cobalt" aria-label="Cobalt"></button>
+    </div>
+    <div class="pill">
+      <button id="zoom-in" aria-label="Zoom in">+</button>
+      <button id="zoom-out" aria-label="Zoom out">−</button>
+    </div>
+  </div>
+
+  <div class="hint">Drag to rotate · Ctrl + scroll to zoom</div>
+
+  <div class="bar">
+    <nav class="pill" aria-label="Camera views">
+      <button id="v-hero">Hero</button>
+      <button id="v-front">Front</button>
+      <button id="v-flex">Flex</button>
+      <button id="v-open">Open</button>
+      <button id="v-back">Back</button>
+    </nav>
+    <div class="pill">
+      <label><span style="opacity:.6">Hinge</span>
+        <input id="hinge" type="range" min="0" max="180" step="1" value="0" aria-label="Hinge angle">
+        <span id="angle" style="width:30px;text-align:right">0°</span>
+      </label>
+    </div>
+  </div>
+  <a class="scroll-cue" href="#dimensions">Dimensions ↓</a>
+</div>
+
+<main>
+  <!-- ============ dimensions ============ -->
+  <section id="dimensions">
+    <p class="eyebrow">Dimensions</p>
+    <h2>Pocket-sized shut, tablet-wide open</h2>
+    <p class="lede">All measurements are in millimetres, taken from the 3D model. When folded, it is a narrow phone with a cover screen and a full keyboard. Opened like a book, the two halves make one 153 mm wide screen.</p>
+
+    <div class="tiles">
+      <div class="tile"><div class="v">123.9<small>mm</small></div><div class="l">Height</div></div>
+      <div class="tile"><div class="v">81.9<small>mm</small></div><div class="l">Width, folded (half + hinge)</div></div>
+      <div class="tile"><div class="v">12.5<small>mm</small></div><div class="l">Thickness, folded (15.5 at the camera)</div></div>
+      <div class="tile"><div class="v">153.0<small>mm</small></div><div class="l">Width, open flat</div></div>
+      <div class="tile"><div class="v">7.0<small>mm</small></div><div class="l">Thickness, open</div></div>
+    </div>
+
+    <div class="drawings">
+      <figure class="drawing">
+        <figcaption>FRONT · FOLDED</figcaption>
+        <svg viewBox="-16 -16 128 158" role="img" aria-label="Front view, folded: 81.9 mm wide by 123.9 mm tall, with the cover screen above a four-row keyboard.">
+          <defs>
+            <marker id="ar" viewBox="0 0 6 6" refX="5.5" refY="3" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L6,3 L0,6 z" fill="var(--dim)"/></marker>
+          </defs>
+          <!-- hinge spine (left) -->
+          <rect class="part" x="0" y="0" width="6.4" height="123.9" rx="1.8"/>
+          <!-- deck leaf: outer corners r 9.2, hinge corners r 1.6 -->
+          <path class="part" d="M7,0 H72.7 Q81.9,0 81.9,9.2 V114.7 Q81.9,123.9 72.7,123.9 H7 Q5.4,123.9 5.4,122.3 V1.6 Q5.4,0 7,0 Z"/>
+          <!-- cover screen 69.7 × 80, 3.6 from top -->
+          <rect class="scr" x="8.8" y="3.6" width="69.7" height="80" rx="6.3"/>
+          <circle cx="43.65" cy="7.4" r="1.1" class="key"/>
+          <text class="lab" x="43.65" y="45" text-anchor="middle">cover screen</text>
+          <text class="dt" x="43.65" y="50" text-anchor="middle">69.7 × 80.0</text>
+          <!-- keyboard pocket and keys -->
+          <rect class="thin" x="8.0" y="85.5" width="71.3" height="29.5" rx="3.6"/>
+          <g id="svgkeys"></g>
+          <!-- earpiece -->
+          <rect class="key" x="36.15" y="118.3" width="15" height="1.1" rx=".55"/>
+          <!-- side buttons on the free edge -->
+          <rect class="part" x="81.9" y="16.95" width=".8" height="18" rx=".4"/>
+          <rect class="part" x="81.9" y="42.45" width=".8" height="11" rx=".4"/>
+          <text class="lab" x="84" y="27" >volume</text>
+          <text class="lab" x="84" y="49" >power</text>
+          <!-- width dimension -->
+          <line class="ext" x1="0" y1="-1" x2="0" y2="-11"/><line class="ext" x1="81.9" y1="-1" x2="81.9" y2="-11"/>
+          <line class="dl" x1="0" y1="-8" x2="81.9" y2="-8" marker-start="url(#ar)" marker-end="url(#ar)"/>
+          <text class="dt" x="40.95" y="-10" text-anchor="middle">81.9</text>
+          <!-- height dimension -->
+          <line class="ext" x1="-1" y1="0" x2="-11" y2="0"/><line class="ext" x1="-1" y1="123.9" x2="-11" y2="123.9"/>
+          <line class="dl" x1="-8" y1="0" x2="-8" y2="123.9" marker-start="url(#ar)" marker-end="url(#ar)"/>
+          <text class="dt" x="-10" y="61.95" text-anchor="middle" transform="rotate(-90 -10 61.95)">123.9</text>
+          <!-- hinge / leaf split -->
+          <line class="ext" x1="5.4" y1="124.9" x2="5.4" y2="133"/>
+          <line class="dl" x1="0" y1="131" x2="5.4" y2="131"/>
+          <line class="dl" x1="5.4" y1="131" x2="81.9" y2="131" marker-end="url(#ar)"/>
+          <text class="lab" x="2.7" y="137.5" text-anchor="middle">hinge</text>
+          <text class="lab" x="43.65" y="137.5" text-anchor="middle">leaf 76.5</text>
+        </svg>
+      </figure>
+
+      <div class="stack">
+        <figure class="drawing">
+          <figcaption>BOTTOM EDGE · FOLDED</figcaption>
+          <svg viewBox="-14 -12 116 40" role="img" aria-label="Bottom edge, folded: 12.5 mm thick, 15.5 mm including the rear camera bump.">
+            <!-- panel leaf (back, top in this view), deck leaf (front, bottom) -->
+            <path class="part" d="M5.4,0 H72.7 Q81.9,0 81.9,2.8 V5.6 H5.4 Z"/>
+            <path class="part" d="M5.4,5.6 H81.9 V9.65 Q81.9,12.45 72.7,12.45 H5.4 Z"/>
+            <!-- spine -->
+            <path class="part" d="M5.4,0 A5.4,6.225 0 0 0 5.4,12.45"/>
+            <!-- camera island + lens ring -->
+            <rect class="part" x="51.9" y="-3.05" width="25" height="3.05" rx=".8"/>
+            <rect class="key" x="38.85" y="11.4" width="8.6" height="1.05" rx=".5" opacity=".5"/>
+            <text class="lab" x="43.65" y="16.2" text-anchor="middle">USB-C</text>
+            <text class="lab" x="64.4" y="-4.4" text-anchor="middle">camera +3.05</text>
+            <text class="lab" x="30" y="3.8" text-anchor="middle">screen half · 5.6</text>
+            <text class="lab" x="30" y="10.2" text-anchor="middle">keyboard half · 6.85</text>
+            <!-- thickness dims -->
+            <line class="ext" x1="0" y1="0" x2="-9" y2="0"/><line class="ext" x1="0" y1="12.45" x2="-9" y2="12.45"/>
+            <line class="dl" x1="-6" y1="0" x2="-6" y2="12.45" marker-start="url(#ar)" marker-end="url(#ar)"/>
+            <text class="dt" x="-8" y="6.2" text-anchor="middle" transform="rotate(-90 -8 6.2)">12.5</text>
+            <line class="ext" x1="83" y1="-3.05" x2="95" y2="-3.05"/><line class="ext" x1="83" y1="12.45" x2="95" y2="12.45"/>
+            <line class="dl" x1="92" y1="-3.05" x2="92" y2="12.45" marker-start="url(#ar)" marker-end="url(#ar)"/>
+            <text class="dt" x="96.5" y="4.7" text-anchor="middle" transform="rotate(-90 96.5 4.7)">15.5</text>
+            <line class="dl" x1="0" y1="20.5" x2="81.9" y2="20.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
+            <text class="dt" x="40.95" y="26" text-anchor="middle">81.9</text>
+          </svg>
+        </figure>
+
+        <figure class="drawing">
+          <figcaption>TOP-DOWN · OPEN FLAT</figcaption>
+          <svg class="big" viewBox="-6 -12 165 36" role="img" aria-label="Open flat: 153.0 mm wide and about 7.0 mm thick, with the inner screen spanning both halves.">
+            <rect class="part" x="0" y="0" width="153" height="5.6" rx="1.2"/>
+            <rect class="part" x="0" y="5.6" width="76.5" height="1.37" rx=".6"/>
+            <line class="thin" x1="76.5" y1="0" x2="76.5" y2="5.6"/>
+            <rect class="scr" x="2" y="-.6" width="149" height=".6"/>
+            <text class="lab" x="76.5" y="-3" text-anchor="middle">one inner screen across both halves · fold line in the middle</text>
+            <text class="lab" x="38.25" y="12.8" text-anchor="middle">keyboard half 76.5</text>
+            <text class="lab" x="114.75" y="12.8" text-anchor="middle">screen half 76.5</text>
+            <line class="dl" x1="0" y1="16.5" x2="153" y2="16.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
+            <text class="dt" x="76.5" y="23" text-anchor="middle">153.0</text>
+          </svg>
+          <p class="note">Open thickness ≈ 7.0 mm on the keyboard half (its raised face plate adds 1.25 mm); 5.7 mm on the screen half.</p>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ full spec ============ -->
+  <section id="spec">
+    <p class="eyebrow">Spec sheet</p>
+    <h2>Every measured part</h2>
+    <p class="lede">The phone has two halves (called <em>leaves</em>, like the pages of a book). The <em>screen half</em> carries the big inner screen and the rear camera. The <em>keyboard half</em> (the <em>deck</em>) carries the cover screen and keys on its outside face.</p>
+
+    <div class="tables">
+      <table>
+        <caption>Overall</caption>
+        <tr><th>Height</th><td>123.9</td></tr>
+        <tr><th>Folded width (half + hinge)</th><td>81.9</td></tr>
+        <tr><th>Folded thickness, without camera</th><td>≈ 12.5</td></tr>
+        <tr><th>Folded thickness, with camera</th><td>≈ 15.5</td></tr>
+        <tr><th>Open width (flat)</th><td>153.0 (2 × 76.5)</td></tr>
+        <tr><th>Open thickness, keyboard half</th><td>≈ 7.0</td></tr>
+      </table>
+
+      <table>
+        <caption>Each half (leaf)</caption>
+        <tr><th>Width</th><td>76.5</td></tr>
+        <tr><th>Body thickness</th><td>5.4</td></tr>
+        <tr><th>Outer-edge corner radius</th><td>9.2</td></tr>
+        <tr><th>Hinge-side corner radius</th><td>1.6</td></tr>
+        <tr><th>Edge bevel</th><td>1.15</td></tr>
+        <tr><th>Back / face glass plate</th><td>0.26</td></tr>
+        <tr><th>Keyboard face plate (raised)</th><td>1.25</td></tr>
+      </table>
+
+      <table>
+        <caption>Cover screen (keyboard half, front)</caption>
+        <tr><th>Active area</th><td>69.7 × 80.0</td></tr>
+        <tr><th>Corner radius</th><td>6.3 (glass 7.1)</td></tr>
+        <tr><th>Glass border</th><td>+0.8 each side</td></tr>
+        <tr><th>Position</th><td class="wrap">centred, 3.6 below top edge</td></tr>
+        <tr><th>Front camera</th><td>punch-hole, top centre</td></tr>
+      </table>
+
+      <table>
+        <caption>Keyboard (keyboard half, front)</caption>
+        <tr><th>Layout</th><td>4 rows × 10 columns</td></tr>
+        <tr><th>Key cap</th><td>6.15 × 5.9</td></tr>
+        <tr><th>Key corner radius / height</th><td>2.3 / 1.05</td></tr>
+        <tr><th>Key spacing (centre to centre)</th><td>6.95</td></tr>
+        <tr><th>Row centres below device centre</th><td>27.8 · 34.8 · 41.8 · 48.8</td></tr>
+        <tr><th>Key tops below face plate</th><td>0.2</td></tr>
+        <tr><th>Pocket corner radius</th><td>3.6</td></tr>
+      </table>
+
+      <table>
+        <caption>Rear camera (screen half, back)</caption>
+        <tr><th>Camera island</th><td>25 × 47, r 8.5</td></tr>
+        <tr><th>Island stands proud by</th><td>1.8</td></tr>
+        <tr><th>Island centre</th><td class="wrap">17.5 in from free edge, 33.0 above centre</td></tr>
+        <tr><th>Lenses</th><td>3 × Ø8.4, pitch 12.6</td></tr>
+        <tr><th>Lens ring</th><td>Ø10.8, 1.25 high</td></tr>
+        <tr><th>Flash / sensor / mic</th><td>Ø3.4 / Ø2.3 / Ø0.8</td></tr>
+        <tr><th>Total camera bump</th><td>≈ 3.05</td></tr>
+      </table>
+
+      <table>
+        <caption>Side buttons (free edge, keyboard half)</caption>
+        <tr><th>Volume rocker</th><td>18 long, centre 36 above middle</td></tr>
+        <tr><th>Power / fingerprint</th><td>11 long, centre 14 above middle</td></tr>
+        <tr><th>Button width / radius</th><td>1.75 / 0.87</td></tr>
+        <tr><th>Stands proud of frame</th><td>0.2</td></tr>
+      </table>
+
+      <div>
+        <h3 style="margin-top:0">Hinge (spine)</h3>
+        <ul class="plain">
+          <li>Brushed-metal half-cylinder, radius 5.4, flush with both backs.</li>
+          <li>Rounded ends, radius 1.8.</li>
+          <li>Turns at half the opening angle. It shows when folded and tucks away when open.</li>
+        </ul>
+        <h3>Inner screen</h3>
+        <ul class="plain">
+          <li>One continuous screen across both halves, 2.0 border all round.</li>
+          <li>Split at the fold: message list on the left, document on the right.</li>
+        </ul>
+      </div>
+
+      <div>
+        <h3 style="margin-top:0">Ports and speakers</h3>
+        <ul class="plain">
+          <li>Earpiece slot below the keys: 15 × 1.1.</li>
+          <li>Bottom edge: USB-C 8.6 × 2.7, a 5-hole speaker grille (Ø1.0), one mic (Ø0.9).</li>
+          <li>Top edge: one mic (Ø0.9).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ finishes ============ -->
+  <section id="finishes">
+    <p class="eyebrow">Finishes</p>
+    <h2>Five colourways</h2>
+    <p class="lede">Click one to apply it to the render at the top of the page.</p>
+    <div class="finishes">
+      <button class="finish" data-goto="porcelain"><div class="chips"><span style="background:#d9d8d5"></span><span style="background:#efece6"></span><span style="background:#34373c"></span></div><b>Porcelain</b><div class="hex">frame #d9d8d5 · face #efece6<br>keys #34373c</div></button>
+      <button class="finish" data-goto="graphite"><div class="chips"><span style="background:#5a5c60"></span><span style="background:#2c2d30"></span><span style="background:#1b1c1f"></span></div><b>Graphite</b><div class="hex">frame #5a5c60 · face #2c2d30<br>keys #1b1c1f</div></button>
+      <button class="finish" data-goto="sage"><div class="chips"><span style="background:#b3b8ad"></span><span style="background:#c2cabb"></span><span style="background:#2f352f"></span></div><b>Sage</b><div class="hex">frame #b3b8ad · face #c2cabb<br>keys #2f352f</div></button>
+      <button class="finish" data-goto="clay"><div class="chips"><span style="background:#c8b09d"></span><span style="background:#dbc6b4"></span><span style="background:#3b2f2a"></span></div><b>Clay</b><div class="hex">frame #c8b09d · face #dbc6b4<br>keys #3b2f2a</div></button>
+      <button class="finish" data-goto="cobalt"><div class="chips"><span style="background:#8290a2"></span><span style="background:#34465f"></span><span style="background:#18202c"></span></div><b>Cobalt</b><div class="hex">frame #8290a2 · face #34465f<br>keys #18202c</div></button>
+    </div>
+  </section>
+
+  <footer class="disclaimer">
+    <p><strong>This is an unofficial design concept.</strong> It is not a Samsung or Clicks product, and is not affiliated with or endorsed by either company. Product names are used only to describe the design inspiration.</p>
+    <p>All geometry is generated in code. No manufacturer models or assets are used. Rendered with <a href="https://threejs.org/">three.js</a>.</p>
+  </footer>
+</main>
+
+<script>
+  /* draw the keyboard into the front-view drawing (front coords: x from the hinge edge of the leaf) */
+  (function () {
+    var g = document.getElementById("svgkeys"), NS = "http://www.w3.org/2000/svg";
+    var L = 76.5, KW = 6.15, KH = 5.9, PX = 6.95, span = 9 * PX + KW, rows = [-27.8, -34.8, -41.8, -48.8];
+    var X = function (x) { return 5.4 + x; }, Y = function (y) { return 61.95 - y; };
+    var add = function (cx, cy, w) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("class", "key"); r.setAttribute("rx", "1.6");
+      r.setAttribute("x", (X(cx) - w / 2).toFixed(2)); r.setAttribute("y", (Y(cy) - KH / 2).toFixed(2));
+      r.setAttribute("width", w); r.setAttribute("height", KH); g.appendChild(r);
+    };
+    var kx0 = L / 2 - span / 2 + KW / 2;
+    for (var ri = 0; ri < 3; ri++) for (var i = 0; i < 10; i++) add(kx0 + i * PX, rows[ri], KW);
+    var widths = [KW, KW, KW, span - 6 * KW - 6 * (PX - KW), KW, KW, KW], fx = L / 2 - span / 2;
+    widths.forEach(function (w) { add(fx + w / 2, rows[3], w); fx += w + (PX - KW); });
+  })();
+  /* finish cards scroll up and apply the finish in the render */
+  document.querySelectorAll("[data-goto]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var sw = document.querySelector('[data-finish="' + b.dataset.goto + '"]');
+      if (sw) sw.click();
+      document.getElementById("viewer").scrollIntoView({ behavior: "smooth" });
+    });
+  });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="app.js"></script>
+</body>
+</html>
