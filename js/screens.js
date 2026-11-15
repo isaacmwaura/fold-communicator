@@ -1,14 +1,16 @@
-/* Fold Communicator — what the two screens show, the two selfie-camera holes, and the screen hand-over.
+/* Fold Communicator — what the two screens show, and the two selfie-camera holes.
    Every picture is drawn with canvas paths in the page font: generic app names and line glyphs, no real app names or
    logos. */
 import * as THREE from "three";
-import { props, S, GEO, Q, params, invalidate } from "./state.js";
-import { $, cv, rr, tex, sm } from "./util.js";
+import { S, GEO, params, finishes, fin, onFinish, invalidate } from "./state.js";
+import { cv, rr, tex } from "./util.js";
 import { mat } from "./materials.js";
 import { tag } from "./teardown.js";
 
-const BLUR = [0, 3, 7, 12, 18, 26];   // hand-over blur steps, in full-size canvas pixels
 const FONT = "'IBM Plex Sans',sans-serif", MONO = "'IBM Plex Mono',monospace";
+// the screens' accent: the chosen finish's (state.js, finishes). (build/shoot.py --selftest: fc_fail=accent keeps
+// Porcelain's whatever the finish, which the controls check must catch)
+const accent = () => (params.fc_fail === "accent" ? finishes.porcelain : fin()).accent;
 const font = (w, px, mono) => w + " " + px + "px " + (mono ? MONO : FONT);
 
 /* SCREEN CONTENT — edit this object; both displays repaint from it. Generic names only. */
@@ -21,6 +23,12 @@ const screen = {
       { app: "Messages",   icon: "chat",  col: "#2a9fd8", when: "now", title: "Mum",            text: "Did you get home okay?", fresh: 1 },
       { app: "Group chat", icon: "chats", col: "#7f8bff", when: "5m",  title: "Football group", text: "3 new messages", count: 3 },
       { app: "Mail",       icon: "mail",  col: "#d9453a", when: "1h",  title: "2 new emails",   text: "Grace W., City Library" }
+    ],
+    // further down the list: shown only while it scrolls (coverScroll, the clip of the touch-sensitive keys)
+    more: [
+      { app: "Calendar",   icon: "calendar", col: "#7f8bff", when: "2h", title: "Team catch-up",  text: "11:00 to 11:30, Room 2" },
+      { app: "Photos",     icon: "photo",    col: "#d98a3d", when: "3h", title: "On this day",    text: "12 photos from a year ago" },
+      { app: "Weather",    icon: "cloud",    col: "#3d8fd1", when: "4h", title: "Rain from 4 pm", text: "Take an umbrella today" }
     ]
   },
   // the inner screen shows one messaging app in its two-pane layout (as foldable messaging apps do): the chat list on
@@ -118,7 +126,7 @@ function rr2(g, x, y, w, h, rt, rb) { g.beginPath(); g.moveTo(x + rt, y); g.arcT
   g.arcTo(x, y + h, x, y, rb); g.arcTo(x, y, x + w, y, rt); g.closePath(); }
 function wall(g, W, H, a) { g.fillStyle = "#08090b"; g.fillRect(0, 0, W, H);
   const gl = (x, y, r, c, al) => { const q = g.createRadialGradient(x, y, 0, x, y, r); q.addColorStop(0, c); q.addColorStop(1, "rgba(0,0,0,0)"); g.globalAlpha = al * a; g.fillStyle = q; g.fillRect(0, 0, W, H); g.globalAlpha = 1; };
-  gl(W * 0.88, H * 0.02, W * 0.95, S.accent, 0.55); gl(W * 0.02, H * 1.02, W * 0.95, "#c46a3c", 0.5); gl(W * 0.45, H * 0.55, W * 0.55, "#34397f", 0.35);
+  gl(W * 0.88, H * 0.02, W * 0.95, accent(), 0.55); gl(W * 0.02, H * 1.02, W * 0.95, "#c46a3c", 0.5); gl(W * 0.45, H * 0.55, W * 0.55, "#34397f", 0.35);
   // the faint dark band real phones put behind the status bar
   const sc = g.createLinearGradient(0, 0, 0, 96); sc.addColorStop(0, "rgba(0,0,0,.32)"); sc.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = sc; g.fillRect(0, 0, W, 96); }
 // Wi-Fi: three arcs and a dot fanning up from (cx, by)
@@ -151,20 +159,41 @@ function statusBar(g, C, col, notes) {
   g.restore();
 }
 
-/* ---------- cover screen: lock screen ---------- */
-function coverTex(T) {
-  const C = CV.cover, W = C.W, H = C.H, c = cv(W, H), g = c.getContext("2d"), D = screen.cover, fs = C.fs;
+/* ---------- cover screen: lock screen ----------
+   scroll (canvas px, 12.5 to the mm): the notification list, longer (cover.more), moved up by that much inside the band
+   between the date and the shortcuts, fading out at the band's ends. Undefined: the lock screen as it rests. */
+const BAND = [326, 838], FADE = [34, 56];
+function coverTex(T, scroll) {
+  const C = CV.cover, W = C.W, H = C.H, c = cv(W, H), g = c.getContext("2d"), D = screen.cover;
   wall(g, W, H, 1);
   statusBar(g, C, "#eceef0");
   g.fillStyle = "#f7f8f9"; g.font = font(300, 178); g.fillText(screen.time, 36, 250);
-  // date, then a weather chip
+  // date, then a weather chip, outlined in the finish's accent (so the accent shows with the phone shut, quietly)
   g.fillStyle = "rgba(240,242,244,.78)"; g.font = font(400, 30); g.fillText(D.date, 46, 302);
   { const x = 46 + g.measureText(D.date).width + 22; g.font = font(500, 26); const w = g.measureText(D.weather).width + 62;
     g.fillStyle = "rgba(255,255,255,.12)"; rr(g, x, 272, w, 42, 21); g.fill();
+    g.strokeStyle = accent(); g.lineWidth = 2.5; g.globalAlpha = 0.85; rr(g, x + 1.25, 273.25, w - 2.5, 39.5, 19.75); g.stroke(); g.globalAlpha = 1;
     glyph(g, "cloud", x + 24, 293, 26, "rgba(240,242,244,.9)"); g.fillStyle = "rgba(240,242,244,.9)"; g.fillText(D.weather, x + 44, 302); }
-  // grouped notifications: one stack, big radius at the top and bottom of the group, small between cards
-  const x0 = 30, cw = W - 60, ch = 128, gap = 5, n = D.cards.length, hd = Math.round(H * 0.02);
-  D.cards.forEach((r, i) => { const y = 344 + i * (ch + gap);
+  if (scroll === undefined) notes(g, C, D.cards, 344);
+  else {
+    // the list on a canvas of its own, its ends faded (destination-in keeps it where the ramp is opaque; past the band's
+    // ends the ramp stays clear), then laid over the wallpaper
+    const l = cv(W, H), lg = l.getContext("2d"), [y0, y1] = BAND, f = lg.createLinearGradient(0, y0, 0, y1);
+    notes(lg, C, D.cards.concat(D.more), 344 - scroll);
+    f.addColorStop(0, "rgba(0,0,0,0)"); f.addColorStop(FADE[0] / (y1 - y0), "#000"); f.addColorStop(1 - FADE[1] / (y1 - y0), "#000"); f.addColorStop(1, "rgba(0,0,0,0)");
+    lg.globalCompositeOperation = "destination-in"; lg.fillStyle = f; lg.fillRect(0, 0, W, H);
+    g.drawImage(l, 0, 0);
+  }
+  // lock-screen shortcuts in the bottom corners, and the home bar
+  [["torch", 102], ["camera", W - 102]].forEach(([k, x]) => { g.fillStyle = "rgba(20,22,28,.58)"; dot(g, x, H - 104, 46);
+    g.strokeStyle = "rgba(255,255,255,.10)"; g.lineWidth = 1.5; ring(g, x, H - 104, 46); glyph(g, k, x, H - 104, 40, "#eef0f2"); });
+  g.fillStyle = "rgba(255,255,255,0.5)"; rr(g, W / 2 - 80, H - 28, 160, 7, 4); g.fill();
+  return tex(T, c);
+}
+// grouped notifications from `top` down: one stack, big radius at the top and bottom of the group, small between cards
+function notes(g, C, list, top) {
+  const fs = C.fs, x0 = 30, cw = C.W - 60, ch = 128, gap = 5, n = list.length, hd = Math.round(C.H * 0.02);
+  list.forEach((r, i) => { const y = top + i * (ch + gap);
     g.fillStyle = r.fresh ? "rgba(34,38,46,.70)" : "rgba(24,27,33,.62)"; rr2(g, x0, y, cw, ch, i ? 10 : 32, i === n - 1 ? 32 : 10); g.fill();
     g.strokeStyle = "rgba(255,255,255,.07)"; g.lineWidth = 1.5; g.stroke();
     tile(g, r.icon, x0 + 60, y + ch / 2, 62, r.col);
@@ -175,30 +204,22 @@ function coverTex(T) {
     if (r.count) { g.font = font(600, hd); const t = String(r.count), w = Math.max(34, g.measureText(t).width + 20);
       g.fillStyle = "rgba(255,255,255,.16)"; rr(g, x0 + cw - 30 - w, y + 54, w, 30, 15); g.fill();
       g.fillStyle = "#f4f5f6"; g.textAlign = "center"; g.fillText(t, x0 + cw - 30 - w / 2, y + 76); g.textAlign = "left"; }
-    else if (r.fresh) { g.fillStyle = S.accent; dot(g, x0 + cw - 40, y + 68, 7); }
+    else if (r.fresh) { g.fillStyle = accent(); dot(g, x0 + cw - 40, y + 68, 7); }
   });
-  // lock-screen shortcuts in the bottom corners, and the home bar
-  [["torch", 102], ["camera", W - 102]].forEach(([k, x]) => { g.fillStyle = "rgba(20,22,28,.58)"; dot(g, x, H - 104, 46);
-    g.strokeStyle = "rgba(255,255,255,.10)"; g.lineWidth = 1.5; ring(g, x, H - 104, 46); glyph(g, k, x, H - 104, 40, "#eef0f2"); });
-  g.fillStyle = "rgba(255,255,255,0.5)"; rr(g, W / 2 - 80, H - 28, 160, 7, 4); g.fill();
-  return tex(T, c);
 }
 
-/* ---------- inner screen: two apps side by side (or one), floating taskbar ---------- */
+/* ---------- inner screen: the messaging app's two panes, floating taskbar ---------- */
 function innerTex(T) {
-  const C = CV.inner, W = C.W, H = C.H, c = cv(W, H), g = c.getContext("2d"), ac = S.accent, single = props.innerLayout === "single";
+  const C = CV.inner, W = C.W, H = C.H, c = cv(W, H), g = c.getContext("2d"), ac = accent();
   // a still's test card (S.testCard, the crease150 still): one flat grey, so only the crease itself can change what the
   // fold looks like
   if (S.testCard) { g.fillStyle = "#5c5f64"; g.fillRect(0, 0, W, H); crease(g, W / 2, H); return tex(T, c); }
   wall(g, W, H, 0.7);
   statusBar(g, C, "#e6e9ec", ["chat", "mail"]);
   const top = 88, bot = H - 140, mid = W / 2;
-  if (single) pane(g, C, { x: 40, y: top, w: W - 80, h: bot - top }, screen.inner.right, ac);
-  else {
-    pane(g, C, { x: 40, y: top, w: mid - 58, h: bot - top }, screen.inner.left, ac);
-    pane(g, C, { x: mid + 18, y: top, w: mid - 58, h: bot - top }, screen.inner.right, ac);
-    g.fillStyle = "rgba(255,255,255,.28)"; rr(g, mid - 3, (top + bot) / 2 - 36, 6, 72, 3); g.fill();   // divider handle
-  }
+  pane(g, C, { x: 40, y: top, w: mid - 58, h: bot - top }, screen.inner.left, ac);
+  pane(g, C, { x: mid + 18, y: top, w: mid - 58, h: bot - top }, screen.inner.right, ac);
+  g.fillStyle = "rgba(255,255,255,.28)"; rr(g, mid - 3, (top + bot) / 2 - 36, 6, 72, 3); g.fill();   // divider handle
   taskbar(g, W / 2, H - 82, ac);
   g.fillStyle = "rgba(255,255,255,.5)"; rr(g, W / 2 - 75, H - 26, 150, 6, 3); g.fill();   // gesture bar
   crease(g, mid, H);
@@ -313,6 +334,7 @@ function pane(g, C, b, a, ac) {
     // compose button
     const fx = b.x + b.w - 104, fy = b.y + b.h - 104;
     g.fillStyle = ac; rr(g, fx, fy, 76, 76, 24); g.fill(); glyph(g, "pencil", fx + 38, fy + 38, 34, "#071014");
+    C.accentAt = [fx + 38, fy + 8];   // (a point of plain accent, clear of the glyph: __fc.screenAccent reads it)
   } else {
     // an open chat: messages stacked up from the compose bar, cut off under the app bar like a scrolled list
     const ch = 72, cy = b.y + b.h - 22 - ch, sw = ch, fx = b.x + 20, fw = b.w - 40 - sw - 14;
@@ -364,9 +386,8 @@ export function createScreens(T, env) {
 }
 
 /* ---------- camera holes ----------
-   Real holes are cut in the panel, so they are meshes on top of the screen, not paint: the hand-over zooms and
-   slides the screen picture, and the holes must stay put. Inner: top-right corner of the right half. Cover:
-   centred at the top of the cover screen. */
+   Real holes are cut in the panel, so they are meshes on top of the screen, not paint. Inner: top-right corner of the
+   right half. Cover: centred at the top of the cover screen. */
 export function addScreenDetails(ctx) {
   const T = ctx.T, { OZ } = GEO;
   const lift = (m, units) => { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = units; return m; };
@@ -387,52 +408,20 @@ export function addScreenDetails(ctx) {
 }
 
 export function repaintScreens() { if (!S.coverMat) return;
-  dropBlur();
   [[S.coverMat, () => coverTex(THREE), "baseCover"], [S.dispMat, () => innerTex(THREE), "baseInner"]].forEach(([m, f, k]) => { if (S[k]) S[k].dispose(); S[k] = m.emissiveMap = f(); m.needsUpdate = true; });
   invalidate();
 }
 
-/* ---------- screen hand-over ----------
-   The unfold animation follows the hinge angle: the picture blurs, stretches and comes into focus on the inner
-   screen as the phone opens, instead of cutting from one screen to the other. The inner screen starts dim, blurred
-   and slightly zoomed and sharpens as the hinge nears 180°; the cover screen blurs out.
-   The blurred copies are drawn at Q.duoScale (½ or ¼) size without mipmaps: a blurred picture loses nothing at lower
-   resolution. */
-function blurSet(T, base) {
-  const src = base.image, k = Q.duoScale || 0.5, w = Math.round(src.width * k), h = Math.round(src.height * k);
-  return BLUR.map((px) => { if (!px) return base; const c = cv(w, h), g = c.getContext("2d");
-    g.fillStyle = "#000"; g.fillRect(0, 0, w, h); g.filter = "blur(" + px * k + "px)"; g.drawImage(src, 0, 0, w, h);
-    const t = tex(T, c); t.generateMipmaps = false; t.minFilter = T.LinearFilter; return t; });
-}
-function makeBlur() { if (S.baseInner && !S.fxInner) { S.fxInner = blurSet(THREE, S.baseInner); S.fxCover = blurSet(THREE, S.baseCover); } }
-function dropBlur() { ["fxCover", "fxInner"].forEach((k) => { (S[k] || []).forEach((t, i) => { if (i) t.dispose(); }); S[k] = null; }); S.duoKey = null; }
-function setScr(mat, t, k, z, slide) { mat.emissiveMap = t; mat.emissiveIntensity = k; const r = 1 / z; t.repeat.set(r, r); t.offset.set((1 - r) / 2 + slide, (1 - r) / 2); }
-// per-frame update; returns true while the effect is still moving
-export function updateDuo(dt) {
-  if (!S.coverMat) return false;
-  // Normally the effect runs while the hinge moves (160 ms after each move). A still (?shot=1) can't catch a move,
-  // so with the hand-over option on it holds the effect at full strength: the picture shows the screens as they look
-  // while the hinge passes through the still's angle (e.g. ?view=open&duo=1&ang=120).
-  const hold = props.duo && !!params.shot;
-  const tgt = props.duo && (hold || performance.now() - S.lastMove < 160) ? 1 : 0;
-  if (hold) S.duoM = 1;
-  else { S.duoM += (tgt - S.duoM) * (1 - Math.exp(-dt * (tgt > S.duoM ? 25 : 4))); if (S.duoM < 0.003) S.duoM = 0; }
-  const m = S.duoM, p = S.ang / 180;
-  if (!m) { if (S.fxOn) { setScr(S.dispMat, S.baseInner, 1, 1, 0); setScr(S.coverMat, S.baseCover, 1, 1, 0); S.fxOn = false; S.duoKey = null; invalidate(); } return tgt > 0; }
-  makeBlur();
-  if (hold && S.fxOn && S.duoKey === p) return false;   // held and already drawn at this angle
-  S.fxOn = true; S.duoKey = hold ? p : null; const N = BLUR.length - 1;
-  const ib = m * (1 - sm(0.4, 1, p)), cb = m * sm(0, 0.55, p);
-  setScr(S.dispMat, S.fxInner[Math.round(ib * N)], 1 - m * (1 - sm(0, 0.5, p)), 1 + 0.12 * m * Math.pow(1 - p, 1.5), 0.05 * m * (1 - p));
-  setScr(S.coverMat, S.fxCover[Math.round(cb * N)], 1 - m * sm(0.1, 0.6, p), 1 + 0.06 * m * p, 0);
-  return true;
-}
+// the cover screen with its notification list scrolled up by px (coverTex), for the clip of the touch-sensitive keys
+// (demo.js); px undefined puts the resting lock screen back
+export function coverScroll(px) { if (!S.coverMat) return;
+  if (S.baseCover) S.baseCover.dispose(); S.coverMat.emissiveMap = S.baseCover = coverTex(THREE, px); invalidate(); }
 
-/* ---------- wire up the controls ---------- */
-$("t-duo").addEventListener("change", (e) => { props.duo = e.target.checked; if (props.duo) makeBlur(); invalidate(); });
-$("t-single").addEventListener("change", (e) => { props.innerLayout = e.target.checked ? "single" : "split"; repaintScreens(); });
-// an accent change repaints the screens only (nothing else uses the accent)
-document.querySelectorAll("[data-accent]").forEach((b) => b.addEventListener("click", () => {
-  props.accent = S.accent = b.dataset.accent; repaintScreens();
-  document.querySelectorAll("[data-accent]").forEach((x) => x.setAttribute("aria-pressed", x === b));
-}));
+// the accent follows the finish (state.js, finishes): a finish change repaints both screens
+onFinish(() => repaintScreens());
+// for build/shoot.py --zoomtest (the controls check): the accent as painted on the inner screen, "#rrggbb"
+if (window.__fc) window.__fc.screenAccent = () => {
+  const t = S.baseInner, at = CV.inner.accentAt; if (!t || !at) return null;
+  const d = t.image.getContext("2d").getImageData(at[0], at[1], 1, 1).data;
+  return "#" + [d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, "0")).join("");
+};

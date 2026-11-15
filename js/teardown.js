@@ -9,7 +9,7 @@
    - High detail (Options): every registered piece at its own level, screen up, every piece drawn.
    Flex ribbons (FC_PARTS.flexes) ride the parts they join and stretch between them. Labels sit in side columns. */
 import * as THREE from "three";
-import { props, S, GEO, params, invalidate, onFinish } from "./state.js";
+import { props, S, GEO, params, fin, invalidate, onFinish } from "./state.js";
 import { $, fmt, mark } from "./util.js";
 import { mat } from "./materials.js";
 // scene.js's floor and shadow hooks. scene.js imports pick() from here; the cycle is safe because neither module uses the
@@ -212,6 +212,7 @@ function prep() {
     if (r.d2 && params.fc_fail === "d2" && !S.reg.some((x) => x.failD2)) { r.d2 = false; r.failD2 = true; }
     r.liftDir = 0;
     r.ld = LIFT[r.layer] || (r.lvD > 1 ? 1 : -1);
+    r.bk = brkOf(r);
     if (r.u) r.obj.traverse((o) => { if (o === r.obj || o.isMesh) o.userData.unit = r.u; });
     // the glass and the lit display of a half are the inner screen's own panel; the backing's box takes them in,
     // so the label can sit on the lit face
@@ -228,6 +229,27 @@ function prep() {
   prepMech(regd);
   buildMerged();
 }
+/* ---------- the camera breakdown ----------
+   A still for the brochure, not a visitor's option: a SHOTS row with `brk` (state.js `cameraparts`, which
+   build/brochure-images.py makes into a picture) turns it on. The rear camera system taken apart along its lens axis,
+   the rest of the phone left out (the row's `only`: every mesh of these entries carries userData.cambrk): the island
+   (rim, glass top, lens rings, cover glass, flash) lifts furthest out of the back; the three modules come out behind
+   it, spread up and down their column so each reads on its own. Offsets in the screen half's own frame (front coords,
+   mm; −z is out of the back), added to each entry's place. The modules keep their order in the column: main at the
+   top, the zoom's prism and long lens in the middle, the ultra-wide below. The bracket under them is left out: it hid
+   the zoom's long lens and crossed the labels' leader lines. */
+const BRK = { island: [0, 0, -36], "cam-main": [0, 10, -14], "cam-prism": [0, 0, -14], "cam-tele": [0, 0, -14], "cam-uw": [0, -10, -14] };
+S.brk = 0;
+function brkOf(r) {
+  const o = r.obj, p = o.userData.part;
+  const at = o.userData.island ? BRK.island : (r.u && r.u.id === "rear-cams" && p ? BRK[p.id] : null);
+  if (!at) return null;
+  o.traverse((m) => { m.userData.cambrk = true; });
+  return new THREE.Vector3(at[0] * r.mx, at[1], at[2]);
+}
+// on or off (applyView in main.js, from the row's brk); the inside culling lets these entries draw while it is on
+export function setBreakdown(on) { on = on ? 1 : 0; if (S.brk === on) return; S.brk = on; ribbonsDirty = true; invalidateShadow(); }
+
 // a piece only High detail draws, by its name (the hinge's) or its look (FC_PARTS.detail.looks)
 let D2LOOK = null;
 function d2(o) {
@@ -277,7 +299,7 @@ function buildMerged() {
     s.ms.push(o); if (r) s.regs.add(r);
   });
   // the pose the copies are made in: open flat, every registered piece at home (then put back as it was)
-  const a0 = S.ang, lm = S.lastMove, pos0 = S.reg.map((r) => r.obj.position.clone()), gx = {};
+  const a0 = S.ang, pos0 = S.reg.map((r) => r.obj.position.clone()), gx = {};
   Object.keys(g).forEach((k) => { gx[k] = g[k].position.x; });
   try {
     S.setFold(180); Object.keys(g).forEach((k) => { g[k].position.x = g[k].userData.foldX || 0; });
@@ -309,7 +331,7 @@ function buildMerged() {
     });
   } finally {
     S.reg.forEach((r, i) => r.obj.position.copy(pos0[i]));
-    S.setFold(a0); S.lastMove = lm; Object.keys(g).forEach((k) => { g[k].position.x = gx[k]; });
+    S.setFold(a0); Object.keys(g).forEach((k) => { g[k].position.x = gx[k]; });
     S.asm.updateMatrixWorld(true);
   }
 }
@@ -722,9 +744,11 @@ export function updateTeardown(dt, snap) {
   const noD2 = simpleOn();
   if (prepped) {
     S.reg.forEach((r) => {
-      r.obj.visible = r.out < 0.97 && !r.obj.userData.onlyHidden && !(shut && r.inside) && !(noD2 && r.d2);
+      const bk = S.brk && r.bk;
+      r.obj.visible = r.out < 0.97 && !r.obj.userData.onlyHidden && !(shut && r.inside && !bk) && !(noD2 && r.d2);
       offsetIn(r, VD, tmpV); if (s > 0) tmpV.lerp(offsetIn(r, VS, tmpS, S.liftE), s);
-      r.obj.position.set(r.base.x + e * tmpV.x, r.base.y + e * tmpV.y, r.base.z + e * tmpV.z + r.ld * r.out * 24); });
+      r.obj.position.set(r.base.x + e * tmpV.x, r.base.y + e * tmpV.y, r.base.z + e * tmpV.z + r.ld * r.out * 24);
+      if (bk) r.obj.position.add(r.bk); });
     // (the Mechanical view keeps the hinge's small pieces, which are the mechanism, but not the mid-frames' tape)
     const noTape = mechOn();
     for (let i = 0; i < D2K.length; i++) D2K[i].visible = !noD2 && !(noTape && D2K[i].userData.detail === 2) && !D2K[i].userData.onlyHidden;
@@ -1407,9 +1431,9 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const mAhText = (n) => n.toLocaleString("en-GB") + " mAh";
 // a part's Spec line: a cell's capacity (worked out in parts.js), then its spec text
 const specText = (p) => [p.mAh ? mAhText(p.mAh) : "", p.spec || ""].filter(Boolean).join(". ");
-// the accent highlight on one mesh; a material array (the keycap pattern) is copied piece by piece
+// the accent highlight (the finish's, state.js) on one mesh; a material array (the keycap pattern) is copied piece by piece
 function lightUp(q) {
-  const hl = (m) => { const h = m.clone(); if (h.emissive) { h.emissive = new THREE.Color(S.accent); h.emissiveIntensity = 0.45; } return h; };
+  const hl = (m) => { const h = m.clone(); if (h.emissive) { h.emissive = new THREE.Color(fin().accent); h.emissiveIntensity = 0.45; } return h; };
   q.orig = q.mesh.material; q.mesh.material = Array.isArray(q.orig) ? q.orig.map(hl) : hl(q.orig); S.sel = q;
 }
 function lightOff() {

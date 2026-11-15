@@ -9,8 +9,8 @@ import { createScene, chooseTier, buildLook, startLoop, updateCamera, goView, an
 import { buildExterior, repaintKeys } from "./exterior.js";
 import { buildHinge, buildSpinePart } from "./hinge.js";
 import { buildInternals, partBox, repaintInternals } from "./internals.js";
-import { createScreens, addScreenDetails, repaintScreens, updateDuo } from "./screens.js";
-import { MODES, setMode, setDetail, updateTeardown, createLabels, layoutLabels, labelCount, showCard } from "./teardown.js";
+import { createScreens, addScreenDetails, repaintScreens } from "./screens.js";
+import { MODES, setMode, setDetail, setBreakdown, updateTeardown, createLabels, layoutLabels, labelCount, showCard } from "./teardown.js";
 
 const FC = window.__fc || (window.__fc = { ready: false, errors: [], warn: [], gl: "", frames: 0, stats: null, budget: null });
 const html = document.documentElement;
@@ -21,17 +21,23 @@ const FONTS = ["300 80px 'IBM Plex Sans'", "400 20px 'IBM Plex Sans'", "500 40px
 const settled = () => S.explode === (S.explodeT || 0) && Math.abs(S.ang - (S.foldTarget === undefined ? S.ang : S.foldTarget)) < 0.01 &&
   S.reg.every((r) => r.out === (r.hide ? 1 : 0));
 
-// focus selector on userData: "flag", "flag=value" or "part=<id>". Aims the camera at the centre of the world box of
-// the matching visible meshes; distance = the row's dist, else box radius ÷ sin(fov/2) × 1.1.
-function resolveFocus() {
-  const f = S.focusReq; S.focusReq = null; if (!f) return;
-  const eq = f.sel.indexOf("="), k = eq < 0 ? f.sel : f.sel.slice(0, eq), val = eq < 0 ? null : f.sel.slice(eq + 1);
+// selector on userData: "flag", "flag=value" or "part=<id>". The world box of the matching visible meshes (empty when
+// none matches)
+function selBox(sel) {
+  const eq = sel.indexOf("="), k = eq < 0 ? sel : sel.slice(0, eq), val = eq < 0 ? null : sel.slice(eq + 1);
   S.asm.updateMatrixWorld(true);
-  const box = new THREE.Box3(), b = new THREE.Box3(); let n = 0;
+  const box = new THREE.Box3(), b = new THREE.Box3();
   S.asm.traverse((o) => { if (!o.isMesh) return; for (let q = o; q; q = q.parent) if (!q.visible) return;
     const u = o.userData, hit = k === "part" ? !!(u.part && u.part.id === val) : (val === null ? !!u[k] : u[k] !== undefined && String(u[k]) === val);
-    if (hit) { b.setFromObject(o); box.union(b); n++; } });
-  if (!n) { fcError("focus '" + f.sel + "' matched no visible mesh"); return; }
+    if (hit) { b.setFromObject(o); box.union(b); } });
+  return box;
+}
+// focus: aims the camera at the centre of the selector's box; distance = the row's dist, else box radius ÷ sin(fov/2)
+// × 1.1.
+function resolveFocus() {
+  const f = S.focusReq; S.focusReq = null; if (!f) return;
+  const box = selBox(f.sel);
+  if (box.isEmpty()) { fcError("focus '" + f.sel + "' matched no visible mesh"); return; }
   const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2;
   S.view.tgt = [c.x, c.y, c.z];
   S.view.dist = f.dist || r / Math.sin(S.cam.fov * Math.PI / 360) * 1.1;
@@ -52,6 +58,7 @@ function setLabels(on) { props.labels = on; $("t-labels").checked = on; invalida
 function applyView(name) {
   const row = SHOTS[name]; if (!row) { fcError("unknown view '" + name + "'"); return; }
   setDetail(!!row.detail, true);
+  setBreakdown(!!row.brk);
   setMode(row.mode, true);
   const mv = MODES[row.mode].view || {}, fromMode = row.cam === MODE_CAM;
   // (a mode's view may carry its own target: the Mechanical view's is fitted, teardown.js; a row may name one, in world mm)
@@ -85,8 +92,6 @@ function applyParams() {
   const check = (id, v) => { const c = $(id); if (c && c.checked !== v) { c.checked = v; c.dispatchEvent(new Event("change")); } };
   if (P.finish) click('[data-finish="' + P.finish + '"]');
   if (P.backdrop) check("t-backdrop", P.backdrop === "graphite");
-  if (P.single !== undefined) check("t-single", on("single"));
-  if (P.duo !== undefined) check("t-duo", on("duo"));
   if (P.shot) check("t-rotate", false);
   if (P.view) applyView(P.view); else if (P.only) setOnly(P.only);
   if (P.detail !== undefined) setDetail(on("detail"), !P.view);
@@ -114,6 +119,21 @@ function glName(ren) { const gl = ren.getContext(), ex = gl.getExtension("WEBGL_
   return String(gl.getParameter(ex ? ex.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || ""); }
 
 FC.shots = Object.keys(SHOTS);
+// where each selector's box sits in the current view, in viewer px: the middle of its box (x, y) and the box's extent
+// on screen (x0 to x1, y0 to y1). The camera breakdown picture's labels point at these (build/brochure-images.py)
+FC.anchors = (sels) => {
+  const cv = S.ren.domElement, W = cv.clientWidth, H = cv.clientHeight, v = new THREE.Vector3(), out = {};
+  S.cam.updateMatrixWorld();
+  const px = (p) => { v.copy(p).project(S.cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
+  const r = (n) => Math.round(n * 10) / 10;
+  sels.forEach((sel) => {
+    const b = selBox(sel); if (b.isEmpty()) { out[sel] = null; return; }
+    const pts = []; for (let i = 0; i < 8; i++) pts.push(px(new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z)));
+    const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]), c = px(b.getCenter(new THREE.Vector3()));
+    out[sel] = { x: r(c[0]), y: r(c[1]), x0: r(Math.min(...xs)), x1: r(Math.max(...xs)), y0: r(Math.min(...ys)), y1: r(Math.max(...ys)) };
+  });
+  return { W, H, at: out };
+};
 FC.setView = async (name) => {
   FC.ready = false; html.removeAttribute("data-fc-ready");
   applyView(name); if (params.shot) snapAll();
@@ -170,6 +190,10 @@ FC.perf = async (btnId) => {
     labelMsAtRest: Math.round(ms[1] * 10) / 10, labels: labelCount(), calls: i.calls, tris: i.tris };
 };
 
+/* __fc.demo(name, t, cam, opts): one frame of a brochure clip, t seconds in (build/brochure-clips.py). js/demo.js is
+   loaded the first time it is called, so a visitor never fetches it */
+FC.demo = (name, t, cam, opts) => import("./demo.js").then((m) => m.demo(name, t, cam, opts));
+
 /* ---------- start-up ---------- */
 async function start() {
   const { T, ren, asm } = createScene();
@@ -190,8 +214,8 @@ async function start() {
   // the contact shadow's casters, then shader programs and textures for every part, hidden ones included (scene.js)
   shadowCasters();
   await warmUp();
-  // per-frame order: camera easing, teardown easing, screen hand-over, focus; then render; then label layout
-  addUpdater(updateCamera); addUpdater(updateTeardown); addUpdater(updateDuo); addUpdater(updateFocus);
+  // per-frame order: camera easing, teardown easing, focus; then render; then label layout
+  addUpdater(updateCamera); addUpdater(updateTeardown); addUpdater(updateFocus);
   addAfterRender(layoutLabels);
   applyParams();
   if (params.shot) snapAll();

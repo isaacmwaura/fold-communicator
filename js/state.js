@@ -4,23 +4,26 @@
 /* ---------- page state (what the controls change) ---------- */
 export const props = {
   finish: "porcelain",
-  accent: "#67c6d4",
-  backdrop: "studio",
+  backdrop: "studio",  // follows the browser's light or dark setting until set by hand (scene.js, followScheme)
   keyBacklight: true,
   autoRotate: false,
-  innerLayout: "split",
-  duo: false,          // screen hand-over: screens blur, zoom and hand over as the hinge moves
   labels: true,
   mode: "whole",       // teardown step, see MODES in teardown.js
   detail: false        // High detail exploded view (Options); off = the Simple exploded view (teardown.js)
 };
 
+/* accent: the screens' accent colour (chips, unread marks, the compose and send buttons, sent messages, the
+   wallpaper's glow) and the highlight on a chosen part, picked for each finish, as a phone's software takes its colour
+   from the case. Each is light enough on the dark screens (at least 8 : 1 against their panes) to carry the near-black
+   text drawn on it (screens.js). Porcelain: the page's own teal, crisp against the warm white. Graphite: amber, warmth
+   on a cool dark metal. Sage: a leaf green from the case's own hue. Clay: a coral, the case's terracotta made bright.
+   Cobalt: a cornflower blue, the case's blue lifted for a dark screen. */
 export const finishes = {
-  porcelain: { frame: 0xd9d8d5, face: 0xefece6, back: 0xedebe7, key: "#34373c" },
-  graphite:  { frame: 0x5a5c60, face: 0x2c2d30, back: 0x323337, key: "#1b1c1f" },
-  sage:      { frame: 0xb3b8ad, face: 0xc2cabb, back: 0xbac3b2, key: "#2f352f" },
-  clay:      { frame: 0xc8b09d, face: 0xdbc6b4, back: 0xd4bfad, key: "#3b2f2a" },
-  cobalt:    { frame: 0x8290a2, face: 0x34465f, back: 0x3a4c66, key: "#18202c" }
+  porcelain: { frame: 0xd9d8d5, face: 0xefece6, back: 0xedebe7, key: "#34373c", accent: "#67c6d4" },
+  graphite:  { frame: 0x5a5c60, face: 0x2c2d30, back: 0x323337, key: "#1b1c1f", accent: "#e3a04f" },
+  sage:      { frame: 0xb3b8ad, face: 0xc2cabb, back: 0xbac3b2, key: "#2f352f", accent: "#93cf86" },
+  clay:      { frame: 0xc8b09d, face: 0xdbc6b4, back: 0xd4bfad, key: "#3b2f2a", accent: "#ee9372" },
+  cobalt:    { frame: 0x8290a2, face: 0x34465f, back: 0x3a4c66, key: "#18202c", accent: "#80a8fa" }
 };
 export const fin = () => finishes[props.finish] || finishes.porcelain;
 
@@ -37,7 +40,7 @@ export const views = {
 };
 
 // runtime scene state, filled in by the modules as they build
-export const S = { accent: props.accent, ang: 0, reg: [], parts: [], explode: 0, gap: 22, center: [0, 0], duoM: 0, lastMove: 0 };
+export const S = { ang: 0, reg: [], parts: [], explode: 0, gap: 22, center: [0, 0] };
 
 /* ---------- geometry constants (mm) ---------- */
 export const GEO = (() => {
@@ -58,13 +61,13 @@ new URLSearchParams(location.search).forEach((v, k) => { params[k] = v; });
 /* ---------- quality tiers (scene.js acts on them) ---------- */
 export const QUALITY = {
   low:  { dpr: 1.25, physical: "glass", clearcoat: false, aniso: false, iridescence: false, relief: "bump", env: 128,
-          shadow: { size: 256, every: 4 }, passives: false, springSegs: 6, duoScale: 0.25,
+          shadow: { size: 256, every: 4 }, passives: false, springSegs: 6,
           tex: { boardUp: 512, boardLo: 256, pouch: 512, can: 128, brushed: 512, tiled: [128, 256] } },
   mid:  { dpr: 1.5, physical: "some", clearcoat: true, aniso: false, iridescence: false, relief: "bump", env: 256,
-          shadow: { size: 512, every: 3 }, passives: true, springSegs: 10, duoScale: 0.5,
+          shadow: { size: 512, every: 3 }, passives: true, springSegs: 10,
           tex: { boardUp: 1024, boardLo: 512, pouch: 1024, can: 256, brushed: 1024, tiled: [256, 512] } },
   high: { dpr: 2, physical: "all", clearcoat: true, aniso: true, iridescence: true, relief: "normal", env: 512,
-          shadow: { size: 512, every: 3 }, passives: true, springSegs: 16, duoScale: 0.5,
+          shadow: { size: 512, every: 3 }, passives: true, springSegs: 16,
           tex: { boardUp: 1024, boardLo: 512, pouch: 1024, can: 256, brushed: 1024, tiled: [256, 512] } }
 };
 // the current tier's settings; chooseTier() in scene.js sets it before anything is built
@@ -151,6 +154,9 @@ export const SHOTS = {
   // world mm); the side keys and an antenna band close up, shut; the hero from just above the floor, so the contact
   // shadow under the bottom edge shows (build/shoot.py's grounded check, GROUND_VIEWS)
   island:     { mode: "whole",   ang: 0,   az: 3.5,   el: 0.25, tgt: [21.7, 33, -7.1], dist: 150, labels: 0 },
+  // the rear camera system taken apart, the rest of the phone left out (brk: teardown.js's camera breakdown; only: its
+  // pieces): the brochure's camera breakdown picture (build/brochure-images.py)
+  cameraparts: { mode: "whole", ang: 0,  az: Math.PI + 0.9, el: 0.2, focus: "cambrk", only: "cambrk", brk: 1, labels: 0 },
   edge:       { mode: "whole",   ang: 0,   az: 1.45,  el: 0.12, focus: "sidekey", dist: 120, labels: 0 },
   stand:      { mode: "whole",   ang: 0,   az: -0.62, el: 0.08, tgt: [0, -8, 0], dist: 500, labels: 0 },
   // the bottom end of the fold from outside: end-on from below, shut, at 30°, 90°, 135° and open flat, from below and

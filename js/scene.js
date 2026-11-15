@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { props, S, GEO, Q, BUDGET, params, views, fin, setTier, updaters, afterRender, setInvalidate, invalidate } from "./state.js";
 import { $, cv, tex, trackTarget, untrackTarget, texBytes } from "./util.js";
 import { studio, mat, setBacklightLook } from "./materials.js";
-import { pick, hitsModel, MODES } from "./teardown.js";
+import { pick, hitsModel, MODES, setMode } from "./teardown.js";
 
 const root = $("viewer"), mount = $("mount"), slider = $("hinge"), playBtn = $("v-play"), qSel = $("t-quality"), lostEl = $("gllost");
 const btns = {};
@@ -476,11 +476,9 @@ export function resetView() {
 export function animateTo(target) {
   if (!S.setFold) return;
   S.foldTarget = target;
-  // standard: an S-curve. Hand-over: a critically damped spring (fast start, long soft settle, no overshoot,
-  // because a real hinge can't swing past flat)
-  const from = S.ang, t0 = performance.now(), duo = props.duo, dur = duo ? 1350 : 900 + Math.abs(target - from) * 3, W = 7;
-  const ease = duo ? (k) => (1 - (1 + W * k) * Math.exp(-W * k)) / (1 - (1 + W) * Math.exp(-W))
-                   : (k) => k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+  // an S-curve: slow out of the start, slow into the end
+  const from = S.ang, t0 = performance.now(), dur = 900 + Math.abs(target - from) * 3;
+  const ease = (k) => k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
   if (S.anim) cancelAnimationFrame(S.anim);
   const step = (now) => { const k = Math.min(1, (now - t0) / dur);
     S.setFold(from + (target - from) * ease(k)); if (k < 1) S.anim = requestAnimationFrame(step); };
@@ -494,7 +492,10 @@ export function go(name) { goView(views[name]); markBtn(name); }
 export function markBtn(k) { if (views[k]) preset = k; Object.keys(btns).forEach((n) => btns[n] && btns[n].classList.toggle("on", n === k)); }
 export function applyBackdrop() {
   const dark = props.backdrop === "graphite";
+  // (.dark also sets the viewer's color-scheme, index.html: the browser's own controls in it follow the backdrop.
+  // build/shoot.py --selftest: fc_fail=ctlscheme keeps them light, which the controls check's slider handle must catch)
   root.classList.toggle("dark", dark);
+  if (params.fc_fail === "ctlscheme") root.style.colorScheme = "light";
   // the shadow a touch lighter on the dark backdrop, where it shows less; the pool a warm white on the light backdrop
   // (lighter than the floor band of the page's backdrop), a soft grey spot on the dark one
   if (sh) { const u = sh.plane.material.uniforms; u.tight.value = CS.opTight * (dark ? 0.85 : 1); u.wide.value = CS.opWide * (dark ? 0.85 : 1);
@@ -504,7 +505,13 @@ export function applyBackdrop() {
 }
 
 /* ---------- wire up the controls ---------- */
-Object.keys(btns).forEach((n) => btns[n].addEventListener("click", () => go(n)));
+// a camera view button shows the whole phone: from any teardown step it goes back to Whole first, and
+// the Teardown pill shows Whole pressed. (build/shoot.py --selftest: fc_fail=viewmode leaves the step as it was, which
+// the controls check must catch)
+Object.keys(btns).forEach((n) => btns[n].addEventListener("click", () => {
+  if (props.mode !== "whole" && params.fc_fail !== "viewmode") setMode("whole", true);
+  go(n);
+}));
 // (in a step that holds its camera, the Mechanical view, Play only opens or shuts the fold: the camera stays on the
 // mechanism)
 if (playBtn) playBtn.addEventListener("click", () => {
@@ -512,12 +519,24 @@ if (playBtn) playBtn.addEventListener("click", () => {
 slider.addEventListener("input", (e) => { if (S.lockFold) return; if (S.anim) cancelAnimationFrame(S.anim); if (S.setFold) S.setFold(+e.target.value); markBtn(null); });
 $("zoom-in").addEventListener("click", () => zoom(0.85));
 $("zoom-out").addEventListener("click", () => zoom(1 / 0.85));
-$("t-backdrop").addEventListener("change", (e) => { props.backdrop = e.target.checked ? "graphite" : "studio"; applyBackdrop(); });
+/* The backdrop follows the browser's light or dark setting (prefers-color-scheme, as the page round the viewer does):
+   dark is the graphite backdrop, light the studio one, at load and whenever the setting changes. The
+   Dark backdrop box shows which it is. Once the visitor ticks or clears the box, that choice holds for the visit; a
+   ?backdrop= in the URL (build/shoot.py's stills) holds from the start. (fc_fail=scheme: the setting is ignored, which
+   build/shoot.py --selftest's controls check must catch) */
+const darkQ = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+let backdropByHand = !!params.backdrop;
+function followScheme() {
+  if (backdropByHand || !darkQ || params.fc_fail === "scheme") return;
+  props.backdrop = darkQ.matches ? "graphite" : "studio"; $("t-backdrop").checked = darkQ.matches; applyBackdrop();
+}
+if (darkQ) darkQ.addEventListener("change", followScheme);
+$("t-backdrop").addEventListener("change", (e) => { backdropByHand = true; props.backdrop = e.target.checked ? "graphite" : "studio"; applyBackdrop(); });
 $("t-rotate").addEventListener("change", (e) => { props.autoRotate = e.target.checked; invalidate(); });
 
 /* ---------- start state ---------- */
 { const v0 = views.hero; S.view = { az: v0.az, el: v0.el, dist: v0.dist, tgt: DEF_TGT.slice(), wide: v0.wide || 0, base: v0.dist }; S.cur = { ...S.view, tgt: DEF_TGT.slice() }; }
-applyBackdrop(); markBtn("hero");
+applyBackdrop(); followScheme(); markBtn("hero");
 
 /* camera hooks for build/shoot.py --zoomtest: snap the eased camera to the view, project a world point to client px,
    zoom toward a client point, read the view */

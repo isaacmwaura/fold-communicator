@@ -9,8 +9,7 @@ An interactive 3D design concept: a folding phone with a real keyboard.
 - **Turn it.** Drag to rotate. Ctrl + scroll or a two-finger pinch zooms toward the point under the pointer; the
   + / − buttons zoom too. Double-tap the background to reset the view.
 - **Open it.** The hinge slider opens it from 0° to 180°, and **Open ▸** plays it. The preset views are Hero, Front,
-  Flex, Open and Back. Under Options, the screen hand-over animation passes the picture between the screens as the
-  phone opens.
+  Flex, Open and Back; each one shows the whole phone.
 - **Take it apart.** Whole, Back off, Screens off, Exploded and Mechanical. Exploded shows the main groups of parts;
   tick High detail under Options to see every piece. Mechanical shows only the frames and the hinge, which works with
   the slider. Tap any part to see what it does.

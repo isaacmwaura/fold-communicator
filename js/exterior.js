@@ -632,7 +632,8 @@ export function buildExterior(ctx) {
      Thickness at the camera stays 15.5: the rings top out 3.03 over the back glass, as before. */
   const IX = L - 17.5, IY = H / 2 - 29, IW = 25, IH = 47, IR = 8.5, IT = 1.8, bk = { leaf: "panel" };
   const lensAt = [[3.6, -12.6], [3.6, 0], [3.6, 12.6]], RL = 4.2, U0 = IT - 0.02, PERI = 1, LS = 64;   // (rings sit 0.02 into the top)
-  const isle = (geo, m, shadow) => { const o = mk(geo, m, panel, shadow); o.rotation.x = Math.PI; o.position.set(IX, IY, OZ + 0.02); tag(o, "back", -5.5, bk); return o; };
+  // (userData.island: the island's own meshes, which the camera breakdown lifts off the back, teardown.js)
+  const isle = (geo, m, shadow) => { const o = mk(geo, m, panel, shadow); o.rotation.x = Math.PI; o.position.set(IX, IY, OZ + 0.02); o.userData.island = true; tag(o, "back", -5.5, bk); return o; };
   // lens ring: an outer band 0.15 lower than the inner band, then the bezel lip (radius RL, 1.0 up) down into the barrel
   const ringP = [[RL - 0.05, 0], [RL + 1.0, 0], [RL + 1.2, 0.2], [RL + 1.2, 0.98], [RL + 1.08, 1.1], [RL + 0.8, 1.1], [RL + 0.72, 1.25], [RL + 0.35, 1.25], [RL, 1.0]];
   // the rim: up the wall, a quarter round of 0.6 over 5 steps, a 0.2 flat (the glass top runs on from inset 0.79)
@@ -689,7 +690,6 @@ export function buildExterior(ctx) {
   const rotY = (q, a) => [q[0] * Math.cos(a) + q[1] * Math.sin(a), -q[0] * Math.sin(a) + q[1] * Math.cos(a)];   // three's turn about y
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], add = (a, b) => [a[0] + b[0], a[1] + b[1]];
   S.setFold = (deg) => {
-    if (Math.abs(deg - S.ang) > 0.01) S.lastMove = performance.now();
     S.ang = deg; const f = (180 - deg) / 360 * Math.PI;
     // spine: P_A stays where the panel's pivot is; deck: P_B stays where the spine's P_B is
     const sp = sub(PA, rotY(PA, f)), dp = add(sub(add(sp, rotY(PB, f)), rotY(PB, 2 * f)), [0, 0]);

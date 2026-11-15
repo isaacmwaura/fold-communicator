@@ -91,8 +91,6 @@ export function shapePoints(sh) {
 export function flatUV(geo, fn) { const p = geo.attributes.position, uv = geo.attributes.uv;
   for (let i = 0; i < p.count; i++) { const q = fn(p.getX(i), p.getY(i)); uv.setXY(i, q[0], q[1]); } uv.needsUpdate = true; return geo; }
 
-// smoothstep
-export const sm = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
 export const fmt = (v) => (Math.round(v * 100) / 100).toString();
 // a closed section [x, z], its points anticlockwise, each edge (pts[i] to pts[i + 1]) moved in by d[i]: each point to
 // where its two moved edges meet (a mitre). Sound while no edge closes up
