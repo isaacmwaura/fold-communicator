@@ -1,11 +1,11 @@
-/* Fold Communicator — the hinge (spine), hinge v2 (WP6; plans/hinge-v2/research/HINGE-EXTERIOR.md §9 and §11).
+/* Fold Communicator — the hinge (spine).
    Two pivots, as on real book foldables: each half turns about its own axis, set into the spine behind the screen, at
    x ±P, z −P in spine-local coords (x across, + toward the panel when open; y along the axis; z depth, screen face
    z = 0, back negative). For a hinge angle A each half turns by φ = (180° − A) / 2, the panel about (+P, −P) and the
    deck about (−P, −P), so the spine cover always sits half-way between them (exterior.js S.setFold places the groups).
-   P = 1.82 makes the shut spine stand 1.9 mm proud of the halves (real phones: 1.1 to 1.6 mm, research §3.1; kept at
-   1.9 for now, run sheet D6): folded width 76.5 + 1.9 = 78.4; open flat the cover hides under the halves' back plates, so 153.0 × 7.0 and the
-   folded 12.5 stay. Why these numbers: a 2D sweep of every cross-section at 1° steps (WP6 report); the 3D check is
+   P = 1.82 makes the shut spine stand 1.9 mm proud of the halves (real phones: 1.1 to 1.6 mm; kept at
+   1.9 by choice): folded width 76.5 + 1.9 = 78.4; open flat the cover hides under the halves' back plates, so 153.0 × 7.0 and the
+   folded 12.5 stay. Why these numbers: a 2D sweep of every cross-section at 1° steps; the 3D check is
    hingeCheck below (?hingecheck=1).
    Leaf front coords for the parts that belong to a half (the deck mirrors x). What moves besides the three groups
    (updateHinge, called by S.setFold):
@@ -20,20 +20,26 @@ import { GEO, Q, S, params } from "./state.js";
 import { mark, rng } from "./util.js";
 import { mat } from "./materials.js";
 import { tag, updateTeardown } from "./teardown.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries, toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 
 /* P pivot offset. W1 where each half's screen ends (the strip spans x ±W1 when open); LK the bend of the strip at the
    half's screen edge, LW the run glued to the wing plate. ZD the display surface's depth, TS the strip's thickness
-   (display to backing). SY the strip's half-length along y. The cover: its shell runs to ±YC, closed by an end plate
-   out to ±YP that carries the pivot pins, then a narrower end cap out to ±ZE (0.1 inside the frame's end face), between
-   the halves' rounded rail ends (elbows, exterior.js) that start at YE, the frame end walls' inner face. RIM the shell's
+   (display to backing). SY the strip's half-length along y. The cover, as on real book foldables, hides the whole
+   mechanism from outside: its shell runs the phone's length, to ±YB, over the end plates (YC to YP) that carry the
+   pivot pins and over the halves' knuckles (the frame end walls' inner part, from YE, their inner face, to YB: a disc
+   of radius EL about each pivot, turning on its pin inside the shell; exterior.js). At ±YB the shell is closed by a
+   plain end face in the cover's metal (shellEnd): its own section, and above the rim a cap over the two knuckles (CR
+   about each pivot, and between them up to the screens' plane). The halves' end walls lap over that face from outside,
+   YB to the frames' ends, as on real book foldables, whose spine is a little shorter than the frames: each wall's
+   corner at the fold is rounded to P about its own pivot (the two walls roll on each other on the fold's middle line
+   and never cross it, and no light passes between them), so from the end only the two frames' plain ends show and, between and below
+   them, the cover's end face, set back by the walls' thickness. NG the hairline between a half and the cover's
+   shoulder. RIM the shell's
    top edge (the pivots' height: the halves' back plates end straight under their pivots, so this is where their edges
    meet the cover when shut), WALL its wall, ZR its ridge's face (flush with the back plates when open). BT the
-   housings' top. EL the elbows' radius about their pivot, LR the end caps' clearance radius: over the elbows' EL and the
-   glass ears' P − 0.03 (exterior.js), and over P, so the two arcs meet (capRuns). It was EL + 0.2, a dark crescent
-   round each elbow from the end (FABLE-REVIEW-2 N3). */
-export const HV = { P: 1.82, W1: 7.0, LK: 1.5, LW: 2.5, ZD: 0.125, TS: 0.4, SY: 58.85, YC: 59.0, YP: 59.3, YE: 59.35, ZE: 61.85,
-  RIM: -1.82, WALL: 0.5, ZR: -5.58, BT: -3.3, EL: 1.77, LR: 1.83 };
+   housings' top. */
+export const HV = { P: 1.82, W1: 7.0, LK: 1.5, LW: 2.5, ZD: 0.125, TS: 0.4, SY: 58.85, YC: 59.0, YP: 59.3, YE: 59.35, YK: 60.62, YB: 60.7,
+  CR: 1.75, NG: 0.2, RIM: -1.82, WALL: 0.5, ZR: -5.58, BT: -3.3, EL: 1.72 };
 const YC_ = [43, 0, -43];            // module centres (hinge-0, -1, -2); each housing spans y_c ± 12
 const PF = -4.3, RB = -3.55;         // housing pocket floors; retaining-plate rebate
 const GEAR_RATIO = 2, built = { modules: [], cover: null, beam: null, plates: null, strip: null, cplate: null, wings: null, spin: [] };
@@ -43,9 +49,9 @@ const GEAR_RATIO = 2, built = { modules: [], cover: null, beam: null, plates: nu
    plates, the keyboard half's face plate, keyboard stack and graphite sheets never come within 0.2 mm of while they
    turn (a 2D sweep of 0° to 180°), less 0.02 to 0.06. The halves' back plates stop at x = ±P, straight under their
    pivots; between them the cover's ridge (|x| ≤ P − 0.2) is flush with the back when open, the 3.2 mm strip real phones
-   show there (research §4, 180°). Above the back plates the shoulders run out and up to the rim at the pivots' height,
+   show there open flat. Above the back plates the shoulders run out and up to the rim at the pivots' height,
    so as a half turns, its back edge slides round the shoulder with a hairline (0.4 to 0.6 mm: the graphite sheets and
-   the keyboard stack keep the cover from the full 0.2). Shut, it is the flat-topped dome, 1.9 proud (research §4; run sheet D6).
+   the keyboard stack keep the cover from the full 0.2). Shut, it is the flat-topped dome, 1.9 proud.
    The shoulder is corner-cut three times (Chaikin) so it is smooth and still inside; the ridge's corners stay sharp
    (rounding the inner one would push the outline out under the back plates). */
 const RIDGE = [[0, HV.ZR], [1.45, HV.ZR], [1.56, -5.55], [1.6, -5.48], [1.6, -5.14]];
@@ -75,34 +81,49 @@ function clipZ(p, zc) {
   return out;
 }
 const OUT_R = RIDGE.slice(0, -1).concat(chaikin(SHOULDER, 3));          // outer, right half, bottom centre -> rim
+/* the collar: the cover's last 0.08 mm at each end, a flange from YK to its end face (YB). The halves' back plates
+   end at y 60.6 (their edge's bevel included), so past them there is nothing beside the ridge for the shoulders to clear: the section fills out
+   there to a plain D, flat across the back at the ridge's level and round up into the shoulders (inside the halves'
+   end-wall bodies, which stand NG off the shoulder and straight down from 0.55 over the wall's back; exterior.js).
+   The cover's end face is then one plain shape, with no step where the ridge stood out. */
+const CJ = OUT_R.findIndex((q) => q[0] > 2.7 && q[1] > -4.95);
+const OUT_C = [[0, HV.ZR], [2.25, HV.ZR], [2.5, -5.53], [2.66, -5.4], [2.74, -5.2]].concat(OUT_R.slice(CJ).filter((q, i, a) => i % 3 === 0 || i === a.length - 1));   // (the shoulder at every third point)
 const IN_R = clipZ(untangle(offsetL(OUT_R, HV.WALL)), HV.RIM);                    // inner, same order
 const BLK_R = clipZ(untangle(offsetL(IN_R, 0.15)), HV.BT);                         // housings: 0.15 inside the cover
 const full = (r) => r.slice().reverse().map((q) => [-q[0], q[1]]).concat(r.slice(1));   // left rim -> bottom -> right rim
-// the outer section (for the size readout and the stills' dark-slot box): left rim to right rim, plus the end caps'
+// the outer section (for the size readout and the stills' dark-slot box): left rim to right rim
 export function coverOutline() { return full(OUT_R); }
 // half-width of a right outline at height z
 function widthAt(r, z) { for (let i = 1; i < r.length; i++) if (r[i][1] >= z) { const a = r[i - 1], b = r[i], t = b[1] === a[1] ? 1 : (z - a[1]) / (b[1] - a[1]); return a[0] + (b[0] - a[0]) * t; } return r[r.length - 1][0]; }
-// the end caps' section, as runs [x, z] (left to right along the bottom; up the right side; the arcs over the top,
-// right to left; down the left side): the cover's outline between the frame rails' end walls (|x| ≤ P + 0.4, 0.2 short
-// of them), and on top the two arcs of radius LR about the pivots, which meet in a cusp: the halves' elbows (radius
-// EL) turn inside those arcs, and the rails' end walls only ever turn away from the cap
-function capRuns() {
-  const { P, LR } = HV, xs = P + 0.4, k = OUT_R.findIndex((q) => q[0] > xs), a = OUT_R[k - 1], b = OUT_R[k];
-  const right = OUT_R.slice(0, k).concat([[xs, a[1] + (b[1] - a[1]) * (xs - a[0]) / (b[0] - a[0])]]);
-  const bottom = right.slice().reverse().map((q) => [-q[0], q[1]]).concat(right.slice(1));
-  const z1 = -P - Math.sqrt(LR * LR - (xs - P) * (xs - P)), a1 = Math.atan2(z1 + P, xs - P), a2 = Math.atan2(-Math.sqrt(LR * LR - P * P), -P), arcR = [], arcL = [];
-  for (let i = 0; i <= 12; i++) { const t = a1 + (a2 - a1) * i / 12; arcR.push([P + LR * Math.cos(t), -P + LR * Math.sin(t)]); }
-  arcR.slice().reverse().forEach((q) => arcL.push([-q[0], q[1]]));
-  const top = arcR.concat(arcL.slice(1));                                           // right side's top to left side's top
-  return { bottom, right: [bottom[bottom.length - 1], top[0]], top, left: [top[top.length - 1], bottom[0]] };
+/* the shell's end at the top (e = 1) or bottom (e = −1): over the last SE along y its outline o (left rim to right rim)
+   draws in toward the rim's middle by SE at the shoulders, a fine bevelled edge, and a flat face closes it at YB: the
+   cover's end, which shows from outside wherever the halves' end walls are not in front of it (below them when shut,
+   as a wedge between them part open, in the notch between their rounded corners open flat). capSection(): that
+   face's outline, spine coords [x, z]: the drawn-in section, and above the rim the cap over the knuckles (a quarter
+   circle of radius CR about each pivot, flat between the pivots at the screens' plane). */
+const SE = 0.06;
+function shellEnd(T, o, e) {
+  const { YB, RIM, ZR } = HV, kx = 1 - SE / o[o.length - 1][0], kz = 1 - SE / (RIM - ZR), pos = [], uv = [];
+  const a = o, b = a.map((q) => [q[0] * kx, RIM + (q[1] - RIM) * kz]);
+  // (each triangle turned to face out: away from the section's middle)
+  const tri = (p, q, r) => { const u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]], v = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
+    const out = (u[1] * v[2] - u[2] * v[1]) * p[0] + (u[0] * v[1] - u[1] * v[0]) * (p[2] - RIM) > 0;
+    (out ? [p, q, r] : [p, r, q]).forEach((w) => { pos.push(w[0], w[1], w[2]); uv.push((w[1] + 62) / 124, 0.5 + w[0] / 14); }); };
+  for (let i = 0; i + 1 < a.length; i++) { const A = [a[i][0], e * (YB - SE), a[i][1]], B = [a[i + 1][0], e * (YB - SE), a[i + 1][1]], C = [b[i + 1][0], e * YB, b[i + 1][1]], D = [b[i][0], e * YB, b[i][1]];
+    tri(A, B, C); tri(A, C, D); }
+  const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
+  return merge([toCreasedNormals(g, Math.PI / 6), capY(T, capSection(), e * YB, e)]);
 }
-// the end cap from y0 to y1: smooth curved faces (normals from the section) and flat ends
-function capGeo(T, y0, y1) {
-  const r = capRuns(), poly = r.bottom.concat(r.top);
-  return merge([sweepY(T, r.bottom, y0, y1, -1), sweepY(T, r.right, y0, y1, -1), sweepY(T, r.top, y0, y1, -1), sweepY(T, r.left, y0, y1, -1),
-    capY(T, poly, y1, 1), capY(T, poly, y0, -1)]);
+export function capSection() {
+  const { P, CR, RIM, ZR } = HV, o = full(OUT_C), kx = 1 - SE / o[o.length - 1][0], kz = 1 - SE / (RIM - ZR), n = 8;
+  const sec = o.map((q) => [q[0] * kx, RIM + (q[1] - RIM) * kz]), hat = [];
+  for (let i = 0; i < n; i++) { const a = i / n * Math.PI / 2; hat.push([P + CR * Math.cos(a), -P + CR * Math.sin(a)]); }
+  hat.push([P, 0]);
+  // (build/shoot.py --selftest: without the cap over the knuckles they show in the notch between the halves' end
+  // walls, open flat: the see-through check must fail)
+  if (params.fc_fail === "seam") return sec;
+  return sec.concat(hat, hat.slice().reverse().map((q) => [-q[0], q[1]]));
 }
-
 /* ---------- geometry helpers ---------- */
 const ni = (g) => (g.index ? g.toNonIndexed() : g);
 const merge = (gs) => mergeGeometries(gs.map(ni), false);
@@ -126,12 +147,13 @@ function cylY(T, r, x, z, y0, y1, seg) { const g = new T.CylinderGeometry(r, r, 
 // lathe about the z axis: profile [r, z] (ordered so the faces point the right way, see LatheGeometry)
 function latheZ(T, pts, seg) { const g = new T.LatheGeometry(pts.map((q) => new T.Vector2(q[0], q[1])), seg || 24); g.rotateX(Math.PI / 2); return g; }
 /* a smooth surface: the open profile pts [x, z] swept along y from y0 to y1, normals from the profile (side +1: its
-   left normal, −1: its right), u along y (the brushed streaks run along the spine), v along the profile */
+   left normal, −1: its right), u along y (the brushed streaks run along the spine), v along the profile. y0 or y1 may
+   be a function of the profile point (an end that is not square across, the cover's rounded ends) */
 function sweepY(T, pts, y0, y1, side) {
   const n = pts.length, pos = [], nor = [], uv = [], idx = []; let s = 0;
   pts.forEach((q, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)], tx = b[0] - a[0], tz = b[1] - a[1], l = Math.hypot(tx, tz) || 1;
     if (i) s += Math.hypot(q[0] - pts[i - 1][0], q[1] - pts[i - 1][1]);
-    [y0, y1].forEach((y) => { pos.push(q[0], y, q[1]); nor.push(-tz / l * side, 0, tx / l * side); uv.push((y + 62) / 124, s / 14); }); });
+    [y0, y1].map((y) => (typeof y === "function" ? y(q) : y)).forEach((y) => { pos.push(q[0], y, q[1]); nor.push(-tz / l * side, 0, tx / l * side); uv.push((y + 62) / 124, s / 14); }); });
   for (let i = 0; i + 1 < n; i++) { const a = 2 * i, b = a + 1, c = a + 2, d = a + 3;
     if (side > 0) idx.push(a, c, b, c, d, b); else idx.push(a, b, c, c, b, d); }
   const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
@@ -145,32 +167,51 @@ function capY(T, pts, y, dir) {
 }
 
 /* ---------- parts ---------- */
-/* spine cover: the outer shell (outline above) along y ±YC with flat ends, and an end cap at each end out to ±ZE, flush
-   with the frame's end faces. Returns { out, ins }: the outside in the finish colour, the inside, rim and the shell's
-   end faces in dark steel. */
+/* spine cover: the outer shell (outline above) along y ±YB, closed there by a flat end across its whole section and
+   over the knuckles (its edge eased over the last SE: shellEnd). Returns { out, ins }: out, the outside in the finish
+   colour (the shell, its ends, the end plates); ins, in the dark look: the inside and rim and the end plates' tops (build/shoot.py's
+   slot-width check counts that mesh, hinge.cover-in, as the phone's inside, and its mechanism check as mechanism:
+   from outside none of it may show). */
 function coverGeo(T) {
-  const { YC, YP, ZE, RIM } = HV, o = full(OUT_R), inn = full(IN_R);
-  const out = [sweepY(T, o, -YC, YC, -1)];
+  const { YC, YP, YK, YB, RIM } = HV, o = full(OUT_R), oc = full(OUT_C), inn = full(IN_R);
+  const out = [sweepY(T, o, -YK, YK, -1), sweepY(T, oc, YK, YB - SE, -1), sweepY(T, oc, SE - YB, -YK, -1)], ins = [];
+  // the collar's step beside the ridge, facing back along the cover (the back plates' ends stop 0.02 short of it)
+  { const k = OUT_R.findIndex((q) => q[0] > 1.5), st = OUT_C.slice(1, 5).concat(OUT_R.slice(k, CJ + 1).reverse());
+    [1, -1].forEach((e) => [1, -1].forEach((sx) => out.push(capY(T, st.map((q) => [sx * q[0], q[1]]), e * YK, -e)))); }
   /* end plates (YC to YP), holding the pivot pins: the shell's section below z −3.4, and from it a web up to a boss
      round each pin (r 0.9). Nothing else: above them the halves' screen glass runs on to the frame's ends (exterior.js),
      and as the phone shuts its ears' deep inner corners pass between the two bosses, down to z −3.29 (so the floor is
-     below that; it was at −2.5 before the ears reached in, FABLE-REVIEW-2 N3). Then the end caps. */
-  const P = HV.P, floor = clipZ(OUT_R, -3.4), plate = [prismY(T, full(floor), YC, YP)];
-  [1, -1].forEach((s) => { plate.push(prismY(T, [[s * (P - 0.4), -3.5], [s * (P + 0.4), -3.5], [s * (P + 0.4), -P], [s * (P - 0.4), -P]], YC, YP));
-    const g = new T.CylinderGeometry(0.9, 0.9, YP - YC, 24); g.translate(s * P, (YC + YP) / 2, -P); plate.push(g); });
-  const plateG = merge(plate), plateB = plateG.clone(); plateB.translate(0, -(YC + YP), 0);
-  out.push(plateG, plateB);
-  [1, -1].forEach((e) => { out.push(capGeo(T, e > 0 ? YP : -ZE, e > 0 ? ZE : -YP)); });
-  const ins = [sweepY(T, inn, -YC, YC, 1)];
+     below that; it was at −2.5 before the ears reached in). The shell runs on past them, over the halves' knuckles.
+     The floor's top, what shows through the bezel's notch between the bosses, and its inner face are dark. */
+  const P = HV.P, fr = clipZ(OUT_R, -3.4), floor = full(fr), WX = P + 0.95, up = [fr[fr.length - 1]].concat(OUT_R.filter((q) => q[1] > -3.4 + 1e-6));
+  [1, -1].forEach((e) => { const lo = e > 0 ? YC : -YP, hi = e > 0 ? YP : -YC;
+    out.push(capY(T, floor, e * YP, e));
+    [1, -1].forEach((s) => { out.push(prismY(T, [[s * (P - 0.4), -3.5], [s * (P + 0.4), -3.5], [s * (P + 0.4), -P], [s * (P - 0.4), -P]], lo, hi));
+      const g = new T.CylinderGeometry(0.9, 0.9, YP - YC, 24); g.translate(s * P, (lo + hi) / 2, -P); out.push(g); });
+    ins.push(sweepY(T, [floor[floor.length - 1], floor[0]], lo, hi, -1), capY(T, floor, e * YC, -e));
+    /* and a web each side from the floor up to the rim, outside x P + 0.95 (WX): the shell's end closed where nothing
+       of a half ever comes. A point of a half that starts beside or above its pivot only turns up and in as the phone
+       shuts, so the quarter below the pivot's height and outside it stays empty. Open-ended there, the shell showed
+       the inside of the phone from below at part-open angles, past the knuckle, once the rail had turned away. Its
+       outer face is the cover's; its top and inner faces dark, as the rim. */
+    [1, -1].forEach((s) => { const web = [[WX, -3.4]].concat(up, [[WX, RIM]]).map((q) => [s * q[0], q[1]]), xo = OUT_R[OUT_R.length - 1][0];
+      out.push(capY(T, web, e * YP, e));
+      ins.push(capY(T, web, e * YC, -e), sweepY(T, s > 0 ? [[xo, RIM], [WX, RIM]] : [[-WX, RIM], [-xo, RIM]], lo, hi, -1),
+        sweepY(T, s > 0 ? [[WX, RIM], [WX, -3.4]] : [[-WX, -3.4], [-WX, RIM]], lo, hi, -1)); }); });
+  // (build/shoot.py --selftest: with the shell's ends left off, the knuckles and the cover's inside show from the
+  // end, past the halves' end walls: the see-through check must fail)
+  if (params.fc_fail !== "capoff") [1, -1].forEach((e) => out.push(shellEnd(T, oc, e)));
+  else out.push(sweepY(T, oc, YB - SE, YB, -1), sweepY(T, oc, -YB, SE - YB, -1));
+  ins.push(sweepY(T, inn, -YB, YB, 1));
   // the rim: the flat top edges, facing the screen
   [1, -1].forEach((s) => { const a = OUT_R[OUT_R.length - 1], b = IN_R[IN_R.length - 1];
-    ins.push(sweepY(T, s > 0 ? [[a[0], RIM], [b[0], RIM]] : [[-b[0], RIM], [-a[0], RIM]], -YC, YC, -1)); });
+    ins.push(sweepY(T, s > 0 ? [[a[0], RIM], [b[0], RIM]] : [[-b[0], RIM], [-a[0], RIM]], -YB, YB, -1)); });
   return { out: merge(out), ins: merge(ins) };
 }
-// the pivot pins: one each side on the halves' pivot axes, from the end plate out through the elbows (the halves' rail
-// ends turn on them; nothing else may sit on the axes, which the screen's loop crosses when shut)
-// (to 60.6, 0.6 short of where the elbow's bore stops, 61.2)
-function pinGeo(T, s) { const { P, YC } = HV; return merge([cylY(T, 0.4, s * P, -P, YC, 60.6, 20), cylY(T, 0.4, s * P, -P, -60.6, -YC, 20)]); }
+// the pivot pins: one each side on the halves' pivot axes, from the end plate out through the knuckles (the halves'
+// end walls turn on them; nothing else may sit on the axes, which the screen's loop crosses when shut), to 0.1 short
+// of the shell's end
+function pinGeo(T, s) { const { P, YC, YB } = HV; return merge([cylY(T, 0.4, s * P, -P, YC, YB - 0.1, 20), cylY(T, 0.4, s * P, -P, 0.1 - YB, -YC, 20)]); }
 
 // housing section below z (0.15 inside the cover), closed along the top
 const blkSec = (z) => { const r = clipZ(BLK_R, z); return full(r); };
@@ -215,7 +256,7 @@ function gearGeo(T, phase) {
 }
 
 // coil spring along y: coil radius 0.28 to the wire centre, wire Ø0.14, 10 turns over 7.5 mm, from y = 0 (the
-// housings sit low in the cover now, under the screen's loop, so the springs are smaller than v1's 0.55 / 0.22)
+// housings sit low in the cover now, under the screen's loop, so the springs are smaller than the earlier 0.55 / 0.22)
 function springGeo(T) {
   const R = 0.28, turns = 10, len = 7.5, c = new T.Curve();
   c.getPoint = (t, out) => (out || new T.Vector3()).set(R * Math.cos(t * turns * Math.PI * 2), t * len, R * Math.sin(t * turns * Math.PI * 2));
@@ -256,7 +297,7 @@ function armGeo(T, s, yc) {
    the bottom of the loop on x = 0, for a half-fold φ and a wing tilt ψ: a bend of length LK turning by ψ (toward the
    back), a straight run LW (glued to the wing plate), then one arc that ends on x = 0 heading −x. Open flat (φ = ψ = 0)
    it is a straight line. ψ is solved (stripSolve) so the strip keeps its length per half (stripLen; W1 at 90° and
-   below): the teardrop of research §11.2 item 12, with the display at least 1.4 mm in radius when shut (the panels are
+   below): a teardrop, with the display at least 1.4 mm in radius when shut (the panels are
    rated to 1.4 to 1.5). */
 function stripHalf(phi, psi) {
   const { P, W1, LK, LW, ZD } = HV, c = Math.cos(phi), s = Math.sin(phi), N = 16;
@@ -270,11 +311,11 @@ function stripHalf(phi, psi) {
     for (let i = 1; i <= N; i++) { const h = tw - D * i / N; pts.push([cx - R * Math.sin(h), cz + R * Math.cos(h)]); } }
   return { pts, len: LK + LW + l3, w0 };
 }
-/* How much screen the strip holds per half (FABLE-REVIEW-2 N4). The halves turn about pivots 1.95 mm below the display,
+/* How much screen the strip holds per half. The halves turn about pivots 1.95 mm below the display,
    so as they close, each half's screen edge comes in toward the fold: the strip has more length than the straight path
    between the two edges. Held at W1 at every angle, that spare length had to sag at once: a 1.4 mm trough already at
-   150°, whose sides face away from the viewer and shade dark. Real phones are flat with a faint line there (research §4,
-   §7): their hinges keep the screen's length by moving its support plates ("the wing plate opens wider"). Modelled the
+   150°, whose sides face away from the viewer and shade dark. Real phones are flat with a faint line there:
+   their hinges keep the screen's length by moving its support plates ("the wing plate opens wider"). Modelled the
    same way: from FLAT_DEG to flat, the strip holds exactly what the halves' own plane needs (ψ = 0: it runs on in each
    half's plane and meets the other in a rounded V, 9.5 mm radius at 150°); from LOOP_DEG down, the full W1, the
    teardrop as before (so the shut loop and its 1.4 mm radius are unchanged); between them it eases from one to the
@@ -352,22 +393,22 @@ export function buildHinge(ctx) {
     m.instanceMatrix.needsUpdate = true; m.computeBoundingBox(); m.computeBoundingSphere(); m.castShadow = true; m.name = "hinge." + id;
     par.add(m); mark(m, { hinge: true }); if (opts.inside) m.userData.small = true; tag(m, layer, ex, opts); return m; };
   const SP = { leaf: "spine" }, ARM = (leaf) => ({ leaf, slide: [3.5, 0, 0] });
-  // inside: not drawn in the closed-up phone (SEEN_OUTSIDE, teardown.js). Hinge v2 closes the slot beside the spine, so
+  // inside: not drawn in the closed-up phone (SEEN_OUTSIDE, teardown.js). The hinge closes the slot beside the spine, so
   // that is now everything in the hinge but the cover and the screen: the housings, beam, arms and plates show only as
   // slivers through the hairlines, and hiding them never lets the background through (id renders round the phone at 0°
-  // to 180°, far and close; WP6 report)
+  // to 180°, far and close)
   const IN = (o) => Object.assign({ inside: true }, o);
   /* tints of registry materials, made here (copies keep the tier's material class and maps): the housings in a darker
      brushed steel, so they read as machined metal, not black plastic, with the gears and shafts; the springs in a
-     lighter brushed steel that catches the light (G2-08); the foam pads grey (G2-09); the door and wing plates and the
+     lighter brushed steel that catches the light; the foam pads grey; the door and wing plates and the
      strip's backing (the screen's steel support over the fold) mid-grey steel: through the hairline beside the spine
-     cover a real phone shows grey metal, never black (research §5) */
+     cover a real phone shows grey metal, never black */
   const tint = (name, hex) => { const m = mat(name).clone(); m.color.setHex(hex); return m; };
   const housing = tint("steelSatin", 0x7c8188), spring = tint("steelSatin", 0xaab0b7), foam = tint("foamTan", 0x606367), door = tint("steelSatin", 0x6e7378);
 
-  // spine cover (outside in the finish colour, inside dark) and the centre beam
+  // spine cover (outside in the finish colour, end caps included; inside, rim and the caps' scallops dark) and the centre beam
   const cg = coverGeo(T);
-  const cover = put(cg.out, "hingeCover", spine, "back", -5.5, SP, "cover"), coverIn = put(cg.ins, "steelDark", spine, "back", -5.5, SP, "cover-in");
+  const cover = put(cg.out, "hingeCover", spine, "back", -5.5, SP, "cover"), coverIn = put(cg.ins, "endCap", spine, "back", -5.5, SP, "cover-in");
   // (build/shoot.py --selftest: with the cover's outer shell not drawn, the slot-width check must fail)
   if (params.fc_fail === "slot") cover.material = new T.MeshBasicMaterial({ visible: false });
   const pins = [1, -1].map((s) => put(pinGeo(T, s), "steelPolished", spine, "back", -5.5, IN(SP), "pin-" + (s > 0 ? "panel" : "deck") + "-axis"));
@@ -430,7 +471,7 @@ export function buildHinge(ctx) {
     wings[leaf] = wg; });
   const CPY = 58.4, rv = [-56, -42, -28, -14, 0, 14, 28, 42, 56], cp = rectP(new T.Shape(), -2.6, 2.6, -CPY, CPY);
   rv.forEach((y) => cp.holes.push(circP(new T.Path(), 0, y, 0.8)));
-  const cpg = [slab(T, cp, -0.75, -0.5, 12)];   // rivet holes Ø1.6: 12 steps (FABLE-REVIEW-1 F2)
+  const cpg = [slab(T, cp, -0.75, -0.5, 12)];   // rivet holes Ø1.6: 12 steps
   rv.forEach((y) => { const g = latheZ(T, [[0, -0.75], [0.8, -0.75], [0.8, -0.6], [0.62, -0.5], [0, -0.5]], 12); g.translate(0, y, 0); cpg.push(g); });
   const dropG = new T.Group(); dropG.name = "hinge.centre-plate-group"; spine.add(dropG);
   const cplate = put(merge(cpg), "plateSilver", dropG, "midframe", 3, IN(SP), "centre-plate"); plates.push(cplate);
@@ -470,7 +511,7 @@ export function updateHinge(deg) {
 const PART_MAP = { "hinge-0": (b) => b.modules[0], "hinge-1": (b) => b.modules[1], "hinge-2": (b) => b.modules[2],
   "hinge-cover": (b) => b.cover, "hinge-beam": (b) => b.beam, "hinge-plates": (b) => b.plates };
 export function buildSpinePart(p, ctx) {
-  if (p.render === "flex") return null;   // ribbons: B5 draws them
+  if (p.render === "flex") return null;   // ribbons: teardown.js draws them
   const e = PART_MAP[p.id] && PART_MAP[p.id](built);
   if (!e) { const m = ctx.partBox(p, ctx); if (/^hinge-/.test(p.id)) mark(m, { hinge: true }); return m; }
   e.members.forEach((m) => mark(m, { part: p }));
@@ -498,7 +539,7 @@ FC().spineBox = () => {
     add(panel, HV.P, y, -GEO.t - 0.2); add(deck, -HV.P, y, -GEO.t - 0.2); }
   return { x0, x1, y0, y1 };
 };
-/* the slot's width (build/shoot.py, the dark-slot stills; FABLE-REVIEW-2 N9c). The near-black count above misses a
+/* the slot's width (build/shoot.py, the dark-slot stills). The near-black count above misses a
    grey slot: the halves' inner walls are frame metal, so a 1.5 mm gap beside the spine would show mid-grey. slotLines():
    at nine places along the spine, a line across it on the outside, sampled every 0.05 mm: 3 mm of the screen half's
    back plate, its edge beside the hinge, the cover's outer section from the panel's side to the deck's, and the
@@ -530,7 +571,7 @@ FC().slotLines = () => {
   }
   return lines;
 };
-/* the crease (build/shoot.py, the crease150 still; FABLE-REVIEW-2 N4). strip(deg): the solved strip at that angle, its
+/* the crease (build/shoot.py, the crease150 still). strip(deg): the solved strip at that angle, its
    display's lowest point (spine coords, mm), its wing tilt ψ in degrees and the length it holds per half.
    creaseBox(y0, y1): screen rectangles (CSS px), between y0 and y1 along the spine, of the fold band (the strip's
    display within 2.5 mm of the middle) and of each half's display 1 to 6 mm past the strip, for the luminance test, and
@@ -550,7 +591,7 @@ FC().creaseBox = (y0, y1) => {
   return { band: box(mid.concat(mid.map((q) => [-q[0], q[1]])), built.strip.parent),
     panel: box(half(1), built.wings.panel.parent), deck: box(half(-1), built.wings.deck.parent), low: FC().strip(S.ang).low };
 };
-/* the hinge's ends (FABLE-REVIEW-2 N3; build/shoot.py, the hingetop stills). spineAt(y): a point on the spine's axis
+/* the hinge's ends (build/shoot.py, the hingetop stills). spineAt(y): a point on the spine's axis
    between the pivots (spine coords (0, y, −P)) in world mm, to aim a close-up at. bezelLine(y, n): n points across the
    fold on the screen's face (spine coords x −6 to 6, z 0) at y, in CSS px, and the px per mm along it. */
 FC().spineAt = (y) => { const v = built.cover.main.position.clone().set(0, y, -HV.P); S.asm.updateMatrixWorld(true); built.cover.main.parent.localToWorld(v); return v.toArray(); };
@@ -564,7 +605,56 @@ FC().bezelLine = (y, n) => {
   return { pts: out, pxPerMm: Math.hypot(b[0] - a[0], b[1] - a[1]) / 12 };
 };
 
-/* ---------- collision sweep (?hingecheck=1; research §11.2 item 9, B3's 1° method) ----------
+/* the fold's end from outside (build/shoot.py, the foldend stills). foldEnd(e): points in CSS px on the top (e = 1) or
+   bottom (e = −1) end of the fold: `end`, on each half's end wall beside the fold and across the cover's end behind
+   them; `rail`, on each half's end wall 8 to 14 mm from the fold, mid-depth. shoot.py reads the still at those points:
+   the fold's end must be the rails' metal, not a dark block. */
+FC().foldEnd = (e) => {
+  if (!built.cover || !S.cam) return null;
+  const r = document.getElementById("mount").getBoundingClientRect(), v = built.cover.main.position.clone(), sp = built.cover.main.parent;
+  const { YB } = HV, y = e * GEO.H / 2, end = [], rail = [];
+  S.asm.updateMatrixWorld(true);
+  const scr = (g, x, yy, z) => { v.set(x, yy, z); g.localToWorld(v); v.project(S.cam); return [+(r.left + (v.x + 1) / 2 * r.width).toFixed(2), +(r.top + (1 - v.y) / 2 * r.height).toFixed(2)]; };
+  [[built.wings.panel.parent, 1], [built.wings.deck.parent, -1]].forEach(([g, s]) => {
+    for (let i = 0; i <= 4; i++) [-1, 0, 1].forEach((d) => end.push(scr(g, s * (1 + i * 0.6), y, -GEO.t / 2 + d)));
+    for (let k = 0; k <= 12; k++) [-1, 0, 1].forEach((d) => rail.push(scr(g, s * (8 + k / 2), y, -GEO.t / 2 + d))); });
+  for (let i = -5; i <= 5; i++) [-3.6, -3.0, -2.4, -1.8, -1.2].forEach((z) => end.push(scr(sp, i * 0.5, e * YB, z)));
+  return { end, rail };
+};
+
+/* the fold's ends as windows (build/shoot.py, the see-through check). endHits(xy, w, h): of the drawing-buffer pixels
+   xy (x from the left, y from the top, of w × h), those whose line of sight comes in from beyond an end of the phone,
+   at 12° or more to the end's plane (a line that only skims the end is a view along the phone, not into its end),
+   and crosses the plane of the cover's end face (y ±YB) inside the fold's end: the cover's end face (capSection) or
+   either half's end wall where it is now (its section from the fold to 6 mm out, with no allowance for its rounded
+   corner on the screen side: what shows past that must be the cover's end too; its back corner as built, rounded
+   about the pivot, exterior.js: past it is the mouth of the hairline between the cover and the half's back plate,
+   which the slot checks measure), each taken M inside its edge. From there a real foldable shows the cover and the
+   frames and nothing else. Returns the pixels' count and their box. */
+FC().endHits = (xy, w, h) => {
+  if (!built.cover || !S.cam) return null;
+  const sp = built.cover.main.parent, o = built.cover.main.position.clone(), v = o.clone(), { P, YB } = HV, M = 0.1, cap = capSection();
+  const phi = (180 - S.ang) / 360 * Math.PI, c = Math.cos(phi), s = Math.sin(phi), zb = 0.1 - GEO.t, RB = GEO.t - 0.1 - P;
+  S.asm.updateMatrixWorld(true); S.cam.updateMatrixWorld();
+  sp.worldToLocal(S.cam.getWorldPosition(o));
+  const inCap = (x, z) => { let k = false;
+    for (let i = 0, j = cap.length - 1; i < cap.length; j = i++) { const a = cap[i], b = cap[j];
+      if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) k = !k; }
+    return k; };
+  // a point of the spine's frame in a half's own (the panel's; the deck's mirrored): the half has turned by φ about (P, −P)
+  const inWall = (x, z) => { const dx = x - P, dz = z + P, xf = P + dx * c + dz * s, zf = -P - dx * s + dz * c;
+    return xf >= M && xf <= 6 && zf >= zb + M && zf <= -M && !(xf < P && zf < -P && Math.hypot(xf - P, zf + P) > RB - M); };
+  const inEnd = (x, z) => inWall(x, z) || inWall(-x, z) || (inCap(x, z) && inCap(x - M, z) && inCap(x + M, z) && inCap(x, z - M) && inCap(x, z + M));
+  let n = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  xy.forEach(([px, py]) => {
+    sp.worldToLocal(v.set((px + 0.5) / w * 2 - 1, 1 - (py + 0.5) / h * 2, 0.5).unproject(S.cam)).sub(o);
+    for (const e of [1, -1]) { if (e * o.y <= YB + 0.5 || e * v.y >= -0.2 * v.length()) continue;
+      const t = (e * YB - o.y) / v.y;
+      if (inEnd(o.x + t * v.x, o.z + t * v.z)) { n++; x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py); } } });
+  return { n, box: n ? [x0, x1, y0, y1] : null };
+};
+
+/* ---------- collision sweep (?hingecheck=1) ----------
    From 0° to 180° in 1° steps: every triangle near the spine (spine coords |x| ≤ 9, z −7.5 to 5) of every mesh is put
    in the spine's frame, and each pair of triangles from two bodies that move against each other (the spine, the
    panel, the deck, the strip, the centre plate, each wing plate, each gear and cam, each hinge flex cable) is tested
@@ -588,6 +678,8 @@ export async function hingeCheck(step) {
   const spine = built.strip.parent, panel = built.wings.panel.parent, deck = built.wings.deck.parent, t0 = performance.now();
   const layerOf = new Map(); S.reg.forEach((r) => layerOf.set(r.obj, r.layer));
   const bodyOf = (o) => {
+    // (a unit's merged copy for the Simple exploded view, teardown.js, is posed open flat and drawn only there)
+    if (o.userData.merged) return null;
     if (o === built.strip) return "strip";
     if (o.userData.spin) return o.name;
     if (/^ribbon\.fx-hinge/.test(o.name)) return o.name;

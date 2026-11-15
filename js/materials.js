@@ -1,30 +1,92 @@
-/* Fold Communicator — materials, the studio environment, the texture toolkit and the finish switch. Owner: B1.
-   Model units are millimetres. Material values follow BUILD-SPEC 6.1; quality tiers follow BUILD-SPEC 4.3. */
+/* Fold Communicator — materials, the studio environment, the texture toolkit and the finish switch.
+   Model units are millimetres. What each quality tier draws is set in Q (state.js). */
 import * as THREE from "three";
 import { props, Q, params, fin, emitFinish, invalidate } from "./state.js";
 import { cv, tex, rng, uploadTexture } from "./util.js";
 
 /* ---------- the studio the shiny parts reflect (turned into an environment map by buildLook() in scene.js) ----------
-   Grey sphere and dim floor for the body of the reflections, one soft overhead box, and three thin HDR strip lights that
-   draw the crisp highlight lines on bevels and glass (R4 2.1). Panels are in tenths of the listed units.
-   B1 tuning: the sphere is a neutral 0.52 (spec start value 0.40, slightly blue), so the finishes read as their swatches
-   under Neutral tone mapping; the strip positions carry the rig's turn, so scene.environmentRotation stays 0 and the
-   screens (which hold their own envMap) see the same studio as everything else. */
+   A dark room with a few large softboxes, as a product photographer lights a phone. An earlier room was
+   one flat 0.52 grey, so glass and metal had nothing to reflect: the back read as one even tone, the frame burnt out
+   and the screens turned milky. Now:
+   - the surround is dark: 0.06 at and below the horizon, up to 0.12 overhead, and 0.05 lighter behind the phone. Not
+     darker: satin metal mirrors the walls, and at 0.03 the spine read near black at 45° open (the dark-slot check on
+     back45). Not lighter: a screen seen from the side mirrors the same walls (at 75° glass reflects a quarter of what
+     it sees) and must stay black (the screen-black check on `side`; screens.js keeps its reflection low for this);
+   - a white floor sweep, 0.6 under the phone fading to 0.2 at the walls, lights every face that looks down (the
+     bottom edge was near black);
+   - softboxes: a large key front-left; a tall strip on each side, a little behind the phone (the bright lines on the
+     frame's edges from the front, out of the screens' mirror angle); a bank overhead; a narrow sheen strip behind-right
+     and a stronger fill behind-left, kept off the spine cover's mirror angle (so the curved cover does not outshine the
+     flat rails beside it: the spine-tone check); a fill in front, above the eye line (the face, out of the screens'
+     mirror); a low card front-left (the curved cover's middle when part open). Each is brighter in the middle and fades
+     at its edges (softboxMap), and adds its light to the room (additive), so its edge never shows as a dark ring;
+   - two large dim fill cards low on the left, one toward the camera of `hero` and one
+     behind (0.5 each), for the satin metal: at the surround's 0.06 the frame and spine mirrored the dark walls and read
+     gunmetal (near #444 on Porcelain, darker than their own antenna bands). They stay clear of the bands the screens
+     mirror from the side (about 60° to 95° either side of the front, where the screen-black check on `side` looks), so
+     the metal picks them up and the screens do not. The one behind was 0.25 until hinge round 1, which raised it
+     with the cover's roughness to meet the spine-tone check. Round 2 put the cover's roughness back (the cover and
+     the frame are one metal: REG_DEF below, and that check now says so) and kept this card: with it the frame metal in
+     `hero` reads 80 % of its swatch at High, about 3 points more than at 0.25. Most of the metal's lift comes from its roughness, not
+     from these cards;
+   - the sheen strip replaced a broad 40 × 40 fill there. The broad fill lit the whole back evenly, so the light
+     finishes read as paper, and it lifted the dark finishes' median. The strip's edge falls on the back's right third in
+     the `back` view: a soft band slides across the glass as the phone turns, and the finish check's median (the back's
+     middle) stays off it on every finish. It is only as tall as the back's mirror needs (28): at Low the back has no
+     clearcoat, and a taller strip spread over the whole of a dark back through its rough base. The light the light
+     finishes lost with the broad fill comes back from a dim fill high behind, far above the back's mirror angle, so it
+     lightens them without lifting the dark ones. Porcelain's band stays small (3 to 4 %): its colour sits at the top of
+     the tone curve, where every highlight is compressed.
+   Brightness is linear, values above 1 are HDR. Tuned so a white card facing the light reads near its own colour: the
+   finish check (build/shoot.py) holds the back's and the face's median within 8 % of their swatches. Each setting
+   here moves several of those checks at once; change one only with the full check run at all three tiers.
+   The rig does not turn with the view (scene.environmentRotation stays 0), so the screens (which hold their own envMap)
+   see the same room as everything else, and reflections slide across the phone as it turns. Units: the room's own,
+   a sphere of radius 60 round the phone. */
+function softboxMap(T) {
+  const Z = 64, c = cv(Z, Z), g = c.getContext("2d"), img = g.createImageData(Z, Z), d = img.data;
+  const edge = (t) => { const k = Math.min(1, Math.min(t, 1 - t) / 0.24); return k * k * (3 - 2 * k); };
+  for (let y = 0; y < Z; y++) for (let x = 0; x < Z; x++) {
+    const u = (x + 0.5) / Z, v = (y + 0.5) / Z, w = edge(u) * edge(v) * (0.8 + 0.2 * Math.cos((u - 0.5) * Math.PI) * Math.cos((v - 0.5) * Math.PI)), i = (y * Z + x) * 4;
+    d[i] = d[i + 1] = d[i + 2] = Math.round(255 * w); d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return new T.CanvasTexture(c);   // linear data (no colour space): the panel's colour sets its brightness
+}
+function floorMap(T) {
+  const Z = 64, c = cv(Z, Z), g = c.getContext("2d"), rg = g.createRadialGradient(Z / 2, Z / 2, 0, Z / 2, Z / 2, Z / 2);
+  rg.addColorStop(0, "rgb(255,255,255)"); rg.addColorStop(0.45, "rgb(215,215,215)"); rg.addColorStop(1, "rgb(85,85,85)");
+  g.fillStyle = "rgb(85,85,85)"; g.fillRect(0, 0, Z, Z); g.fillStyle = rg; g.fillRect(0, 0, Z, Z);
+  return new T.CanvasTexture(c);
+}
 export function studio(T) {
-  const s = new T.Scene();
-  s.add(new T.Mesh(new T.SphereGeometry(60, 32, 16), new T.MeshBasicMaterial({ color: new T.Color(0.52, 0.52, 0.52), side: T.BackSide })));
-  const fl = new T.Mesh(new T.PlaneGeometry(160, 160), new T.MeshBasicMaterial({ color: new T.Color(0.10, 0.10, 0.10) }));
+  const s = new T.Scene(), sb = softboxMap(T);
+  const sg = new T.SphereGeometry(60, 32, 16), sp = sg.attributes.position, col = [];
+  for (let i = 0; i < sp.count; i++) {
+    const e = sp.getY(i) / 60, b = Math.min(1, Math.max(0, -sp.getZ(i) / 30));
+    const v = (e > 0 ? 0.06 + 0.06 * Math.pow(e, 0.8) : 0.06) + 0.05 * b * b * (3 - 2 * b); col.push(v, v, v); }
+  sg.setAttribute("color", new T.Float32BufferAttribute(col, 3));
+  s.add(new T.Mesh(sg, new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide })));
+  const fl = new T.Mesh(new T.PlaneGeometry(120, 120), new T.MeshBasicMaterial({ color: new T.Color(0.6, 0.6, 0.6), map: floorMap(T) }));
   fl.rotation.x = -Math.PI / 2; fl.position.y = -22; s.add(fl);
-  const box = (w, h, x, y, z, v) => { const m = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ color: new T.Color(v, v, v), side: T.DoubleSide }));
-    m.scale.setScalar(0.1); m.position.set(x / 10, y / 10, z / 10); m.lookAt(0, 0, 0); s.add(m); };
-  box(520, 260, 0, 320, 30, 3.0);      // soft overhead box
-  box(20, 300, -300, 20, 230, 10);     // vertical strip, front-left
-  box(20, 300, 300, 20, -230, 10);     // vertical strip, back-right
-  box(300, 20, 0, 190, 300, 8);        // horizontal strip above the front
+  const box = (w, h, x, y, z, v) => { const m = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ color: new T.Color(v, v, v), map: sb,
+    side: T.DoubleSide, transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+    m.position.set(x, y, z); m.lookAt(0, 0, 0); s.add(m); };
+  box(40, 30, -30, 22, 34, 9);       // key, front-left and above
+  box(16, 50, -48, 4, -12, 4);       // tall strip, left, a little behind
+  box(16, 50, 48, 4, -12, 4);        // tall strip, right, a little behind
+  box(56, 36, 0, 50, 4, 4);          // bank overhead
+  box(10, 28, 19.4, -4.7, -50.4, 7); // sheen strip, behind-right, 159° round (the back glass's band in the `back` view)
+  box(40, 40, -50, 24, -16, 4);      // fill behind-left (light on the back, outside its mirror angle there)
+  box(60, 24, 0, 20, 48, 5);         // fill front, above the eye line (light on the face, out of the screens' mirror)
+  box(30, 16, -36, -4, 36, 1.5);     // card front-left, low (the spine cover part open)
+  box(40, 24, -34.8, -4.5, 38.6, 0.5); // fill card, camera-left and low (the spine and frame in `hero` and `stand`)
+  box(64, 30, -33, -2, -40, 0.5);    // fill card, behind-left and low (the frame and spine in the back views)
+  box(50, 30, 8, 38, -38, 2);        // fill high behind (light on the back glass, 50° over its mirror angle in the back views)
   return s;
 }
 
-/* ---------- texture painting (BUILD-SPEC 4.4) ----------
+/* ---------- texture painting ----------
    Every recipe is a generator that paints its canvases in small steps. The first step (the base fill) runs at once, so
    a texture is never uploaded as garbage. With ?shot=1 the rest runs at once too; otherwise it runs in setTimeout(0)
    chunks of at most 8 ms, then the textures are re-uploaded and a frame is requested. */
@@ -96,7 +158,7 @@ function* putGrey(c, h, base, scale) {
   g.putImageData(img, 0, 0);
 }
 
-/* ---------- height picture → normal map (R4 3.2) ----------
+/* ---------- height picture → normal map ----------
    OpenGL convention (+y = +v), which three.js expects with normalScale (1, 1): canvas rows run down and are flipped on
    upload, so +v is −row, and the green channel is +d(height)/d(row). Checked by eye at a low light angle. */
 function* normalGen(src, out, strength) {
@@ -118,7 +180,7 @@ function* normalGen(src, out, strength) {
    Tiled maps assume the house UVs: millimetres, as ExtrudeGeometry (util.ext) makes them. Each texture's repeat is
    1 / tile size in mm, kept in userData.tileMm; a mesh with 0..1 UVs makes a variant() with its own repeat. */
 
-// brushed metal streaks along U (R4 3.3): rough (multiplies the material roughness; mean BRUSH_MEAN) and bump.
+// brushed metal streaks along U: rough (multiplies the material roughness; mean BRUSH_MEAN) and bump.
 // One shared set per tier and seed.
 export const BRUSH_MEAN = 0.85;
 const brushCache = {};
@@ -142,7 +204,7 @@ export function brushed(opts) {
     gr.globalAlpha = gb.globalAlpha = 1;
   })(), [rough, bump]);
   const set = { rough, bump, normal: null, tileMm };
-  // High: the hinge steel gets a real normal map made from the bump picture (BUILD-SPEC 4.3, relief maps)
+  // High: the hinge steel gets a real normal map made from the bump picture (Q.relief)
   if (Q.relief === "normal") {
     const cn = cv(Z, Z); set.normal = tiledTex(cn, false); set.normal.repeat.copy(bump.repeat); set.normal.userData.tileMm = tileMm;
     paint((function* () { const g = cn.getContext("2d"); g.fillStyle = "rgb(128,128,255)"; g.fillRect(0, 0, Z, Z); yield; yield* normalGen(cb, cn, 3); })(), [set.normal]);
@@ -164,6 +226,26 @@ export function grain(opts) {
   return t;
 }
 
+// fine isotropic grain as a normal map: the satin, bead-blasted metal of the frame and the spine cover (the brushed
+// streak map stretched into stair-steps at the frame's corners, and real 2026 frames are blasted, not brushed). The height picture is painted on a canvas that is never uploaded; only the normal map is. One shared map
+// per tier, 256² at Low (Q.tex.tiled[1]). opts: { tileMm, blobMm, seed }
+const grainNCache = {};
+export function grainNormal(opts) {
+  opts = opts || {};
+  const Z = Q.tex.tiled[1], tileMm = opts.tileMm || 4, seed = opts.seed || 61, key = Z + ":" + tileMm + ":" + seed;
+  if (grainNCache[key]) return grainNCache[key];
+  const ch = cv(Z, Z), cn = cv(Z, Z), t = tiledTex(cn, false);
+  t.repeat.set(1 / tileMm, 1 / tileMm); t.userData.tileMm = tileMm;
+  paint((function* () {
+    const g = cn.getContext("2d"); g.fillStyle = "rgb(128,128,255)"; g.fillRect(0, 0, Z, Z); yield;
+    const h = new Float32Array(Z * Z), rnd = rng(seed), cells = Math.min(Z / 2, tileMm / (opts.blobMm || 0.06));
+    yield* noiseInto(h, Z, Z, cells, 1, rnd); yield* noiseInto(h, Z, Z, cells / 2.5, 0.45, rnd);
+    yield* putGrey(ch, h, 128, 60);
+    yield* normalGen(ch, cn, 2);
+  })(), [t]);
+  return (grainNCache[key] = t);
+}
+
 // dot lattice (vapour-chamber wick pillars): a bump map. opts: { pitchMm, size, seed }
 export function dots(opts) {
   opts = opts || {};
@@ -180,8 +262,8 @@ export function dots(opts) {
   return t;
 }
 
-// flex-cable traces along U, seen through amber polyimide: a colour map (the material colour stays white). G2-07: real
-// polyimide is a darker amber than a flat orange (RC §3: #d98b2b to #c99a5a, seen against the board it reads darker),
+// flex-cable traces along U, seen through amber polyimide: a colour map (the material colour stays white). Real
+// polyimide is a darker amber than a flat orange (about #d98b2b to #c99a5a; seen against the board it reads darker),
 // and the copper shows only faintly through it: bundles of fine lines with plain film between them, not even stripes.
 // Same size as before at every tier, so no texture memory is added. opts: { pitchMm, size }
 export function traces(opts) {
@@ -199,17 +281,17 @@ export function traces(opts) {
   return t;
 }
 
-/* ---------- part map sets (B2 passes them to matWith) ----------
+/* ---------- part map sets (internals.js passes them to matWith) ----------
    Coordinates are mm on the part, from its lower-left corner (x right, y up); the picture spans the whole w × h, so
    u = x / wMm and v = y / hMm. placeMm() fits a set onto a mesh with millimetre UVs. Each set returns colour (map,
    sRGB), ORM (ambient occlusion, roughness, metalness in R, G, B; no colour space) and bump; at High also normal
-   where BUILD-SPEC 4.3 asks for it (cans, cells). Roughness and metalness in ORM are absolute: matWith sets the
+   where the part has fine relief (cans, cells). Roughness and metalness in ORM are absolute: matWith sets the
    material's own values to 1. */
 function sheet(wMm, hMm, Z) { const ppm = Z / Math.max(wMm, hMm); return { W: Math.max(8, Math.round(wMm * ppm)), H: Math.max(8, Math.round(hMm * ppm)), ppm }; }
 function canvases(W, H) { return { col: cv(W, H), orm: cv(W, H), hgt: cv(W, H) }; }
 function mapSet(cs) {
   const set = { map: tex(THREE, cs.col, { color: true }), orm: dataTex(cs.orm), bump: dataTex(cs.hgt) };
-  set.orm.channel = 0;   // aoMap reads the first UV set (R4 CHECK 9)
+  set.orm.channel = 0;   // aoMap reads the first UV set
   return set;
 }
 const ORM = (ao, rough, metal) => "rgb(" + Math.round(ao * 255) + "," + Math.round(rough * 255) + "," + Math.round(metal * 255) + ")";
@@ -427,26 +509,60 @@ function lensTex(T) {
   g.fillStyle = "rgba(90,200,170,0.12)"; g.beginPath(); g.ellipse(m + 24, m + 20, 14, 8, -0.6, 0, 7); g.fill();
   return tex(T, c);
 }
-
-/* ---------- material registry (BUILD-SPEC 6.1): mat(name) returns one shared material ----------
+// the flash: a ringed Fresnel lens over a small yellow LED, for a disc with 0..1 UVs (CircleGeometry)
+function flashTex(T) {
+  const Z = 64, c = cv(Z, Z), g = c.getContext("2d"), m = Z / 2;
+  g.fillStyle = "#e6e1d2"; g.fillRect(0, 0, Z, Z);
+  for (let r = m; r > 6; r -= 2.6) { g.strokeStyle = r % 5.2 < 2.6 ? "rgba(255,255,250,0.55)" : "rgba(150,145,130,0.35)"; g.lineWidth = 1.2; g.beginPath(); g.arc(m, m, r, 0, 7); g.stroke(); }
+  const led = g.createRadialGradient(m, m, 0, m, m, 9); led.addColorStop(0, "#f4d36a"); led.addColorStop(0.7, "#e8c45a"); led.addColorStop(1, "rgba(230,225,210,0)");
+  g.fillStyle = led; g.fillRect(m - 10, m - 10, 20, 20);
+  return tex(T, c);
+}
+/* ---------- material registry: mat(name) returns one shared material ----------
    c: sRGB hex (null = from the finish in applyFinish()), r: roughness, m: metalness. Extras apply at Mid and High
    unless noted: cc / ccr clearcoat and its roughness; aniso (High); irid iridescence (High); brushed streak maps (all
    tiers; bump too where bump is set); grain / dots / traces detail maps; film: opacity of a thin see-through film (all
    tiers; still writes depth); phys: Physical at Mid even with no extra on;
-   always: Physical with clearcoat at every tier (BUILD-SPEC 4.3, G1-12). */
+   always: Physical (with its clearcoat, if it has one) at every tier; grainN: the satin grain
+   normal map (grainNormal; scale = normalScale); ei: the material holds the studio as its own envMap at this intensity
+   (envMapIntensity only scales a material's own envMap since three.js r163); map: "flash" (the picture below);
+   si: the base layer's specularIntensity under a clearcoat (Mid and High).
+   The frame and the spine cover are one satin blasted metal (when the cover took the frame's colour at 0.92 and the
+   brushed map, it showed as a bluer band); the back is a satin glass with a real clearcoat sheen; the black glass has
+   one glossy layer, not two; keycaps are matte soft-touch. The satin metal's roughness is 0.40: at 0.30 the spine
+   mirrored the studio's softboxes as hard chrome stripes; at 0.40 they blend into one soft gradient and the metal
+   reads satin silver. The back's clear glass is glossy (clearcoat 1.0 at 0.10) over a colour layer that reflects
+   little itself (si 0.5: an ink under glass meets glass, not air), so the sheen strip shows as a band with a soft
+   edge instead of an even lift. The island holds the studio at 0.15: at full strength its glass top mirrored the
+   overhead bank and read silver in `exploded` (the island-black check). The lenses and their cover glass hold it at
+   0.3: camera optics are anti-reflection coated, and at full strength the sheen strip showed as a white square in the
+   periscope's window in `island`. The gasket is a dark grey, not black: black, it read as a drawn outline. */
 const REG_DEF = {
-  frame:        { c: null, r: 0.34, m: 1, phys: 1, brushed: { bump: 0 }, aniso: 0.35 },
+  frame:        { c: null, r: 0.40, m: 1, phys: 1, grainN: { tileMm: 4, scale: 0.08 } },
   face:         { c: null, r: 0.42, m: 0, cc: 0.6, ccr: 0.18 },
-  back:         { c: null, r: 0.62, m: 0, cc: 0.3, ccr: 0.5, grain: { tileMm: 16, scale: 0.06 } },
+  back:         { c: null, r: 0.42, m: 0, cc: 1.0, ccr: 0.10, si: 0.5, grain: { tileMm: 16, scale: 0.06 } },
   web:          { c: null, r: 0.52, m: 0, cc: 0.3, ccr: 0.4 },
-  keycap:       { c: null, r: 0.38, m: 0, cc: 0.5, ccr: 0.25 },
-  glassBlack:   { c: 0x050608, r: 0.05, m: 0, cc: 1, ccr: 0.03, irid: 0.3, always: 1 },
-  island:       { c: 0x0c0d0f, r: 0.14, m: 0, cc: 1, ccr: 0.05, phys: 1 },
+  keycap:       { c: null, r: 0.5, m: 0, cc: 0.25, ccr: 0.3 },
+  glassBlack:   { c: 0x050608, r: 0.04, m: 0, irid: 0.3, ei: 0.6, always: 1 },
+  island:       { c: 0x0c0d0f, r: 0.08, m: 0, cc: 1, ccr: 0.04, phys: 1, ei: 0.15 },
   port:         { c: 0x0e0f11, r: 0.8, m: 0 },
   flash:        { c: 0xf3eedc, r: 0.25, m: 0, cc: 1, ccr: 0.1, phys: 1 },
-  lens:         { c: "lens", r: 0.04, m: 0, cc: 1, ccr: 0.02, irid: 0.3, phys: 1 },
-  hingeCover:   { c: null, r: 0.30, m: 1, phys: 1, brushed: { bump: 0.6, normal: 1 }, aniso: 0.7 },
-  antenna:      { c: null, r: 0.5, m: 0 },
+  lens:         { c: "lens", r: 0.04, m: 0, cc: 1, ccr: 0.02, irid: 0.3, phys: 1, ei: 0.3 },
+  hingeCover:   { c: null, r: 0.40, m: 1, phys: 1, grainN: { tileMm: 4, scale: 0.08 } },
+  antenna:      { c: null, r: 0.55, m: 0 },
+  // (the frame's edges) a band through the frame: plastic in the frame's colour, mixed 35 % toward grey
+  // (applyFinish); the dark inside of a port, hole or grille; the USB-C tongue; the black seam between glass and frame
+  antennaBand:  { c: null, r: 0.55, m: 0 },
+  portCavity:   { c: 0x08090a, r: 0.9, m: 0 },
+  usbTongue:    { c: 0x6a6d72, r: 0.45, m: 0 },
+  gasket:       { c: 0x1c1d20, r: 0.7, m: 0 },
+  // (the camera island and the fold) the stepped black barrel behind each lens, the recessed glass with its blue-purple coating
+  // glint, the island's machined metal rim (frame colour, polished), the ringed flash lens, the hinge's hidden faces (endCap: the cover's inside, the knuckles)
+  lensBarrel:   { c: 0x0b0c0e, r: 0.55, m: 0.3 },
+  lensGlass:    { c: 0x030407, r: 0.03, m: 0, cc: 1, ccr: 0.02, irid: 0.45, phys: 1, ei: 0.3 },
+  islandRim:    { c: null, r: 0.18, m: 1, phys: 1 },
+  flashLens:    { c: 0xffffff, r: 0.22, m: 0, cc: 1, ccr: 0.08, phys: 1, map: "flash" },
+  endCap:       { c: 0x1c1d20, r: 0.45, m: 0.6 },
   steelSatin:   { c: 0xc5c8cc, r: 0.30, m: 1, phys: 1, brushed: { bump: 0.6, normal: 1 }, aniso: 0.7 },
   steelPolished:{ c: 0xe3e5e8, r: 0.12, m: 1 },
   steelDark:    { c: 0x3a3d42, r: 0.45, m: 1 },
@@ -462,14 +578,14 @@ const REG_DEF = {
   btb:          { c: 0x141516, r: 0.5, m: 0 },
   graphite:     { c: 0x2e2f33, r: 0.7, m: 0.2, grain: { tileMm: 12, scale: 0.4 } },
   ferrite:      { c: 0x1b1c1e, r: 0.6, m: 0 },
-  vc:           { c: 0xa2a7aa, r: 0.4, m: 1, dots: { pitchMm: 1, scale: 0.3 } },   // G2-07: silver-grey, a faint lattice
+  vc:           { c: 0xa2a7aa, r: 0.4, m: 1, dots: { pitchMm: 1, scale: 0.3 } },   // silver-grey, a faint lattice
   alu:          { c: 0xb9bcc1, r: 0.42, m: 1, brushed: { bump: 0 } },
   copperFoil:   { c: 0xb98a6c, r: 0.30, m: 1 },
   oledBack:     { c: 0xc8cbcf, r: 0.45, m: 1 },
   tapeBlack:    { c: 0x141518, r: 0.7, m: 0 },
   tapeBlue:     { c: 0x2a5bd6, r: 0.5, m: 0 },
   flexAmber:    { c: 0xb8721f, r: 0.4, m: 0, cc: 0.3, ccr: 0.4, traces: 1, film: 0.9 },
-  // G2-06: RC's #1c1c1e is the colour seen in photos, light included; as a base colour it renders as a flat unlit bar,
+  // #1c1c1e is the colour seen in photos, light included; as a base colour it renders as a flat unlit bar,
   // so the base is a step lighter (it renders near #1c1c1e) with flexAmber's clearcoat, and the bends show shading
   flexBlack:    { c: 0x2c2d31, r: 0.5, m: 0, cc: 0.3, ccr: 0.4 },
   stiffenerGold:{ c: 0xc9a54a, r: 0.35, m: 0.8 },
@@ -484,8 +600,12 @@ const REG_DEF = {
   carrierWhite: { c: 0xe6e6e2, r: 0.6, m: 0 },
   domeSteel:    { c: 0xc4c6c6, r: 0.25, m: 1 }
 };
-// per-finish roughness tweaks (B1, by eye): a dark anodised frame shows streaks more, so it is a touch rougher
-const FINISH_ROUGH = { graphite: { frame: 0.38, hingeCover: 0.33 }, cobalt: { frame: 0.36 } };
+// per-finish roughness tweaks (by eye): a dark anodised frame shows every reflection crisply, so it is a touch rougher.
+// The spine cover keeps the frame's roughness in every finish. (A slightly rougher cover than the frame was tried;
+// measured, a cover rougher than the rails beside it reads brighter, because its curve gathers more of the
+// softboxes: 0.36 against 0.30 was 11 % brighter at 90° open, over the 10 % the spine-tone check allows. Both at one
+// roughness, they stay together.)
+const FINISH_ROUGH = { graphite: { frame: 0.44, hingeCover: 0.44 }, cobalt: { frame: 0.43, hingeCover: 0.43 } };
 
 const REG = {};
 export function mat(name) {
@@ -494,7 +614,7 @@ export function mat(name) {
   return m;
 }
 
-// which class a registry name gets at the current tier (BUILD-SPEC 4.3)
+// which class a registry name gets at the current tier (Q.physical)
 function physical(d) {
   if (d.always) return true;
   if (Q.physical === "glass") return false;
@@ -502,19 +622,23 @@ function physical(d) {
   return !!(d.phys || d.cc || d.aniso || d.irid);
 }
 
-function build(T, name, d, lensMap) {
+function build(T, name, d, pics) {
   const o = { roughness: d.r, metalness: d.m };
-  if (d.c === "lens") o.map = lensMap;               // a colour map: the colour stays white (G1-13)
+  if (d.c === "lens") o.map = pics.lens;             // a colour map: the colour stays white
   else if (d.c !== null) o.color = d.c;
+  if (d.map === "flash") o.map = pics.flash;
+  if (d.ei !== undefined && pics.env) Object.assign(o, { envMap: pics.env, envMapIntensity: d.ei });
+  if (d.grainN) { o.normalMap = grainNormal({ tileMm: d.grainN.tileMm }); o.normalScale = new T.Vector2(d.grainN.scale, d.grainN.scale); }
   const phys = physical(d), high = Q.tier === "high";
   if (phys && d.cc && (Q.clearcoat || d.always)) Object.assign(o, { clearcoat: d.cc, clearcoatRoughness: d.ccr });
+  if (phys && d.si !== undefined && Q.clearcoat) o.specularIntensity = d.si;
   if (phys && d.irid && Q.iridescence) Object.assign(o, { iridescence: d.irid, iridescenceIOR: 1.3, iridescenceThicknessRange: [180, 420] });
   if (d.brushed) {
     const b = brushed();
     o.roughnessMap = b.rough; o.roughness = Math.min(1, d.r / BRUSH_MEAN);
     if (d.brushed.normal && b.normal) { o.normalMap = b.normal; o.normalScale = new T.Vector2(0.35, 0.35); }
     else if (d.brushed.bump) { o.bumpMap = b.bump; o.bumpScale = d.brushed.bump; }
-    // anisotropy stretches highlights along the tangent (U); brushing runs along U, so turn it a quarter (R4 2.6)
+    // anisotropy stretches highlights along the tangent (U); brushing runs along U, so turn it a quarter
     if (phys && d.aniso && Q.aniso && high) Object.assign(o, { anisotropy: d.aniso, anisotropyRotation: Math.PI / 2 });
   } else if (phys && d.aniso && Q.aniso && high) Object.assign(o, { anisotropy: d.aniso, anisotropyRotation: Math.PI / 2 });
   if (d.grain) { o.bumpMap = grain({ tileMm: d.grain.tileMm, blobMm: d.grain.blobMm, seed: 20 + name.length }); o.bumpScale = d.grain.scale; }
@@ -543,20 +667,40 @@ export function matWith(name, maps, o) {
 
 /* ---------- build every registry material (each module then asks for its own by name: mat()) ---------- */
 export function createMaterials(T, ren, env) {
-  const lensMap = lensTex(T);
-  Object.keys(REG_DEF).forEach((name) => { REG[name] = build(T, name, REG_DEF[name], lensMap); REG[name].name = name; });
-  applyFinish();
+  const pics = { lens: lensTex(T), flash: flashTex(T), env };
+  Object.keys(REG_DEF).forEach((name) => { REG[name] = build(T, name, REG_DEF[name], pics); REG[name].name = name; });
+  applyFinish(); setBacklightLook();
+}
+
+/* the keyboard backlight against the backdrop: a real backlight is all but invisible in a bright studio,
+   so on the light backdrop the legends glow at about 0.12 (the backlight's 0.55 × 0.22), at full strength on the dark
+   one. exterior.js sets the backlight's on/off level; this scales it. scene.js (applyBackdrop) calls it. */
+let darkLook = false;
+export function setBacklightLook(dark) {
+  if (dark !== undefined) darkLook = dark;
+  if (REG.keycap) { REG.keycap.emissiveIntensity = darkLook ? 1 : 0.22; invalidate(); }
 }
 
 // finish swatches: recolour the finish-driven materials, then tell subscribers (keys repaint their legend map)
+const GREY = new THREE.Color(0x8a8d92);
 export function applyFinish() {
   if (!REG.frame) return;
   const f = fin(), tweak = FINISH_ROUGH[props.finish] || {};
-  REG.frame.color.setHex(f.frame); REG.face.color.setHex(f.face); REG.back.color.setHex(f.back); REG.web.color.setHex(f.face);
+  REG.frame.color.setHex(f.frame); REG.face.color.setHex(f.face); REG.back.color.setHex(f.back);
+  // the key web sits in the keys' shade: about 15 % darker than the face, as seen (0.72 in linear light)
+  REG.web.color.setHex(f.face).multiplyScalar(0.72);
   if (REG.keycap.map) REG.keycap.color.setHex(0xffffff); else REG.keycap.color.set(f.key);
-  REG.hingeCover.color.setHex(f.frame).multiplyScalar(0.92);
-  REG.antenna.color.setHex(f.frame).lerp(new THREE.Color(0x8a8d92), 0.5);
+  // one metal, one tone across the frame's rails and the spine cover
+  REG.hingeCover.color.setHex(f.frame); REG.islandRim.color.setHex(f.frame);
+  REG.antenna.color.setHex(f.frame).lerp(GREY, 0.35); REG.antennaBand.color.copy(REG.antenna.color);
   ["frame", "hingeCover"].forEach((n) => { const d = REG_DEF[n], r = tweak[n] || d.r; REG[n].roughness = d.brushed ? Math.min(1, r / BRUSH_MEAN) : r; });
+  // (build/shoot.py --selftest: a back tinted 25 % toward blue-grey must fail the finish check)
+  if (params.fc_fail === "tint") REG.back.color.lerp(new THREE.Color(0x7c8798), 0.25);
+  // (and the frame metal at gunmetal must fail the frame-tone check; a silver island top, the island check)
+  if (params.fc_fail === "gunmetal") { REG.frame.color.setHex(0x55565a); REG.hingeCover.color.setHex(0x55565a); }
+  if (params.fc_fail === "island") REG.island.color.setHex(0xc4c6ca);
+  // (and the spine cover more satin than the frame, the spine-tone check: they are one metal)
+  if (params.fc_fail === "satin") REG.hingeCover.roughness += 0.06;
   emitFinish();
   invalidate();
 }

@@ -1,24 +1,25 @@
-/* Fold Communicator — teardown steps, the two exploded views, flex ribbons, part labels and the part card. Owner: B5.
-   Built to BUILD-SPEC 6.6 and 7 (R4 §5), and to FABLE-REVIEW-1 F4, F6, F7, F9, F12 (WP4). Exploded lays the open phone
-   flat and lifts its pieces to levels (parts.js `ex`), each level drifting along one fixed screen direction, so the
+/* Fold Communicator — teardown steps, the two exploded views, flex ribbons, part labels and the part card.
+   Exploded lays the open phone flat and lifts its pieces to levels (parts.js `ex`), each level drifting along one
+   fixed screen direction, so the
    stack reads as a diagonal staircase from the default camera. Pieces keep their true thickness: only translation.
    - Simple (the default): the parts.js units, each moved as one piece to its unit's level and labelled once, the way a
-     teardown lays a phone out ("there's a motherboard, there are the cameras"). The stack lies back up (run sheet D1):
+     teardown lays a phone out ("there's a motherboard, there are the cameras"). The stack lies back up:
      the back cover with its camera island on top, the inner screen at the bottom. The small pieces only High detail
-     draws (FC_PARTS.detail) are left out.
-   - High detail (Options, run sheet D4): every registered piece at its own level, screen up, every piece drawn.
+     draws (FC_PARTS.detail) are left out, and at rest each unit draws as one mesh per material (buildMerged).
+   - High detail (Options): every registered piece at its own level, screen up, every piece drawn.
    Flex ribbons (FC_PARTS.flexes) ride the parts they join and stretch between them. Labels sit in side columns. */
 import * as THREE from "three";
 import { props, S, GEO, params, invalidate, onFinish } from "./state.js";
 import { $, fmt, mark } from "./util.js";
 import { mat } from "./materials.js";
-// B1's floor and shadow hooks. scene.js imports pick() from here; the cycle is safe because neither module uses the
+// scene.js's floor and shadow hooks. scene.js imports pick() from here; the cycle is safe because neither module uses the
 // other's exports while it loads (only later, at run time).
 import { setFloor, invalidateShadow } from "./scene.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 /* Teardown steps: which layers (see parts.js) each one lifts off, and where the camera goes. The exploded view's
    camera is fitted to the stack whenever the step is chosen and whenever the free room on screen changes (fitExplode). */
-/* Mechanical (WP5): only the structure (FC_PARTS.mechanical names it), the fold left free so the slider and Play work
+/* Mechanical: only the structure (FC_PARTS.mechanical names it), the fold left free so the slider and Play work
    the mechanism (holdCam: Play folds it without moving the camera); its camera is fitted to the structure at 90° open
    (fitMech). */
 export const MODES = {
@@ -33,15 +34,15 @@ export const MODES = {
 // phone (High detail level above the mid-frames'), else out through the back (see prep: r.ld)
 const LIFT = { screen: 1, midframe: 1, back: -1, cover: -1, coverscreen: -1 };
 
-/* Exploded-view method (BUILD-SPEC 7.1): offset = e · (lv·gap·Z + lv·gap·fan·Sd + half·X_leaf + slide), e =
+/* Exploded-view method: offset = e · (lv·gap·Z + lv·gap·fan·Sd + half·X_leaf + slide), e =
    smoothstep(explode), lv = the piece's level (High detail: its own; Simple: its unit's).
    Sd: the default camera's screen-right direction on the floor, fixed so the fan does not follow the orbit; it is
    taken so that the higher levels drift right in both layouts (screen up and back up).
    half moves each half's whole group (frame included) away from the hinge, so the hinge comes apart sideways.
    High detail keeps the values tuned by eye on `exploded`, `hinge` and `kbdstack` before the units (tried 12 / 0.35 / 8
    and in-between: at the low ends each plate hides most of the one below it). Simple has fewer levels and whole
-   units, so it closes up: 11 mm a level, 8 mm apart at the hinge ("less floating", ISAAC-FEEDBACK-26OCT).
-   Portrait screens (F7): the camera looks down more (el 0.6) and the fan narrows (× 0.35), so the levels read
+   units, so it closes up: 11 mm a level, 8 mm apart at the hinge (less floating).
+   Portrait screens: the camera looks down more (el 0.6) and the fan narrows (× 0.35), so the levels read
    vertically on a tall screen. */
 const EXV = {
   simple: { gap: 11, fan: 0.45, half: 8, el: 0.5, back: true },
@@ -53,7 +54,7 @@ const EX = { az: -0.55, portraitEl: 0.6, portraitFan: 0.35, floorGap: 12, fill: 
 const Q_UP = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
 const Q_BACK = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, Math.PI, 0));
 const DEF_TGT = new THREE.Vector3(0, -1, 0);                      // where the exploded camera looks (scene.js default)
-const FLOOR0 = -GEO.H / 2 - 16;                                   // B1's floor for the assembled phone
+const FLOOR0 = -GEO.H / 2 - 16;                                   // scene.js's floor for the assembled phone
 // each layout's live numbers: level gap, half move, and the fan direction (gap · fan · Sd, in assembly coords)
 const VS = { simple: true, gap: EXV.simple.gap, half: EXV.simple.half, fd: new THREE.Vector2() };
 const VD = { simple: false, gap: EXV.detail.gap, half: EXV.detail.half, fd: new THREE.Vector2() };
@@ -74,7 +75,7 @@ const mechOn = () => props.mode === "mechanical";
 // the steps whose labels sit in side columns, clear of the model
 const colsOn = () => props.mode === "explode" || mechOn();
 
-/* ---------- what the closed-up phone draws (FABLE-REVIEW-1 F2, WP2) ----------
+/* ---------- what the closed-up phone draws ----------
    three.js draws every visible mesh, hidden inside or not (it has no occlusion culling), so the whole phone drew all
    ~200 meshes and ~300k triangles, the chips, springs and screws inside included. In Whole mode, once every part is
    home (no explode, nothing lifted off), the entries registered `inside` are not drawn. Which those are was measured,
@@ -85,7 +86,7 @@ const colsOn = () => props.mode === "explode" || mechOn();
    and the slot (at worst 0.33 % of the picture, at 10° from 220 mm; 0.1 % at 0°, 0.07 % at 180°; a sliver now shows
    the part behind the hidden one), and at no angle does the background show through the phone.
    SEEN_OUTSIDE: the key mat (between the keys), the inner screen's panels (in the seams) and the spine cover. Since
-   hinge v2 closed the slot beside the spine (WP6), the hinge's housings, beam, plates and flex cables show only as
+   the hinge closes the slot beside the spine, the hinge's housings, beam, plates and flex cables show only as
    slivers through the hairlines, and hiding them never lets the background through (re-measured the same way at 0°
    to 180°), so they are inside too; hinge.js marks its own pieces. The ribbons follow their ends, so they go too. When another step is chosen every entry is drawn again before anything moves, so the parts fly out
    as before. */
@@ -112,7 +113,7 @@ export function setMode(name, keepCam) {
   ghosts(!!md.mech);
   caption();   // (before the fit: the caption is part of the readout box the fit keeps clear of)
   S.explodeT = name === "explode" ? 1 : 0;
-  S.lockFold = name === "explode"; $("hinge").disabled = S.lockFold;   // the fold stays open flat while exploded, and the slider shows it can't move (F13)
+  S.lockFold = name === "explode"; $("hinge").disabled = S.lockFold;   // the fold stays open flat while exploded, and the slider shows it can't move
   Object.keys(mbtns).forEach((n) => mbtns[n] && mbtns[n].classList.toggle("on", n === name));
   root.classList.toggle("teardown", name !== "whole");
   labelsEl.classList.toggle("cols", colsOn()); sizesKey = "";
@@ -157,17 +158,17 @@ const portrait = () => mount.clientWidth < mount.clientHeight;
 const smooth = (x) => x * x * (3 - 2 * x);
 const ZERO3 = [0, 0, 0];
 
-/* Level nudges (BUILD-SPEC 6.6 item 6: "small level nudges, ±0.3"), High detail only, by mesh name, found with
-   ?explodecheck=1. The swing arms slide 3.5 mm out from the hinge (B3's slide), over the edge of the parts beside them:
+/* Level nudges (small, ±0.3), High detail only, by mesh name, found with
+   ?explodecheck=1. The swing arms slide 3.5 mm out from the hinge (their `slide`), over the edge of the parts beside them:
    - the arms with their sliders and pins (−1.5) would sit 0.2 mm into the main board (−1.4, only 1.4 mm higher):
      one step lower (−1.8) they float just under it, still between the beam (−3.0) and the cams (−0.9);
    - the arm screws (−0.1) would sit in the cells' edge (0): one step lower (−0.4) they float between their arms and
      the cells, still above the arms, as screws taken out. */
 const NUDGE = [[/^hinge\.(arm|sliders|pin)-(panel|deck)/, -0.3], [/^hinge\.(screws|recess)-(panel|deck)/, -0.3]];
-/* The inner screen is one laminated plate: glass, lit OLED and backing (F4). It is built as the backing (internals.js,
+/* The inner screen is one laminated plate: glass, lit OLED and backing. It is built as the backing (internals.js,
    the inner-oled parts) plus the glass and the display (exterior.js), per half so it can fold; exploded, all of it
    rises as one plate at the backing's level, and the label and a tap on the lit face name the panel. Across the halves
-   it is still one panel (parts.js: "One panel runs across both halves"; G2-03): every "screen" layer entry on a half
+   it is still one panel (parts.js: "One panel runs across both halves"): every "screen" layer entry on a half
    cancels its half's sideways move, so the two halves meet over the hinge's fold strip instead of parting like the
    frames below them. In Simple the unit table says the same (the inner screen is `rigid`). */
 const PLATE_LV = 4;
@@ -176,7 +177,7 @@ const PLATE_LV = 4;
 const HINGE_D2 = (() => { const w = ((window.FC_PARTS || {}).detail || {}).hinge || [];
   return w.length ? new RegExp("^hinge\\.(" + w.join("|") + ")(-|$)") : null; })();
 
-/* Units (parts.js, WP4). Each registered entry belongs to the unit that `take`s it (the outside shell, the screens,
+/* Units (parts.js). Each registered entry belongs to the unit that `take`s it (the outside shell, the screens,
    the keycaps: pieces of no part, or of a part that sits in another unit's layer), else to its part's unit; the unit
    is written on every mesh of the entry (userData.unit), which is how a tap or a label check names it in Simple. */
 function unitOf(r) {
@@ -192,7 +193,7 @@ function unitOf(r) {
 let prepped = false;
 const UQ = {};                 // unit id → its label entry (built for every unit: the card and the taps use it too)
 const D2K = [];                // child meshes drawn only in High detail (internals.js detail kinds)
-// once, after the build and measureBases: each entry's unit, levels, layout moves; the F4 plate; the detail pieces
+// once, after the build and measureBases: each entry's unit, levels, layout moves; the inner screen's plate; the detail pieces
 function prep() {
   if (prepped) return; prepped = true;
   const plate = {};
@@ -212,7 +213,7 @@ function prep() {
     r.liftDir = 0;
     r.ld = LIFT[r.layer] || (r.lvD > 1 ? 1 : -1);
     if (r.u) r.obj.traverse((o) => { if (o === r.obj || o.isMesh) o.userData.unit = r.u; });
-    // F4: the glass and the lit display of a half are the inner screen's own panel; the backing's box takes them in,
+    // the glass and the lit display of a half are the inner screen's own panel; the backing's box takes them in,
     // so the label can sit on the lit face
     const pq = plate[r.lf];
     if (r.layer === "screen" && pq && !r.obj.userData.part) {
@@ -225,12 +226,124 @@ function prep() {
   const regd = new Set(S.reg.map((r) => r.obj));
   S.asm.traverse((o) => { if (o.isMesh && !regd.has(o) && (o.userData.detail === 2 || d2(o))) D2K.push(o); });
   prepMech(regd);
+  buildMerged();
 }
 // a piece only High detail draws, by its name (the hinge's) or its look (FC_PARTS.detail.looks)
 let D2LOOK = null;
 function d2(o) {
   if (!D2LOOK) D2LOOK = new Set((((window.FC_PARTS || {}).detail || {}).looks || []).map((n) => mat(n)));
   return !!(HINGE_D2 && HINGE_D2.test(o.name || "")) || D2LOOK.has(o.material);
+}
+
+/* ---------- Simple exploded: one mesh per material per unit ----------
+   At rest in the Simple layout every unit moves as one piece (one level, one slide; a rigid unit's members on the
+   halves cancel their halves' sideways move), so its pieces never move apart: one draw call per material is enough.
+   Once, after the build, the pieces each unit shows in Simple are copied, fold open flat and every piece at home, into
+   one mesh per (unit, material) in the group of the first of them (its leader); a unit that is not rigid keeps one per
+   half, since the halves part sideways. While the view is at rest in Simple (fold open flat, layout settled, the unit
+   neither lifted apart by its card nor lit up, every piece of it drawn and home), the merged mesh is drawn and follows
+   its leader's move, and the originals are taken off every camera's layers (not hidden: the labels, ribbons, overlap
+   count and focus still read them, and they keep moving). Everywhere else, High detail and Mechanical included, the
+   originals draw as before. Left out: see-through looks (they are sorted per mesh), instanced meshes, a material array
+   (the keycaps are one mesh already), geometry rewritten at run time (the screen over the fold, the ribbons). Under
+   ?shot every merged mesh is checked against its pieces each frame it is drawn (__fc.errors if one is 0.001 mm off).
+   The pieces of no unit that are not registered either (the frame bodies and their walls) never leave their half:
+   they merge the same way, one mesh per material per half. */
+const MG = [];                 // { mesh, u, P (its group), lead, inv (the leader's home in P, inverted), ms, regs, on }
+let liftedU = null;            // the unit whose card last lifted its members apart (showUnit)
+const _mm = new THREE.Matrix4(), _mi = new THREE.Matrix4();
+function buildMerged() {
+  const objReg = new Map(S.reg.map((r) => [r.obj, r])), d2k = new Set(D2K), g = groups();
+  const leafG = (o) => { for (let p = o; p; p = p.parent) if (p.parent === S.asm) return p; return null; };
+  // the registered entry a piece moves with (itself or the nearest one above it)
+  const regOf = (o) => { for (let p = o; p && p !== S.asm; p = p.parent) if (objReg.has(p)) return objReg.get(p); return null; };
+  const hostSet = new Set(S.parts.map((q) => q.mesh));
+  // a piece Simple draws: not a High-detail-only piece, nor inside one (nor the one the --selftest draws on purpose)
+  const simpleDrawn = (o) => { for (let p = o; p && p !== S.asm; p = p.parent) { const r = objReg.get(p); if (d2k.has(p) || (r && (r.d2 || r.failD2))) return false; } return true; };
+  const plainProto = THREE.Object3D.prototype.onBeforeRender;
+  const sets = new Map();
+  S.asm.traverse((o) => {
+    const r = regOf(o), u = o.userData.unit, m = o.material;
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !r !== !u || Array.isArray(m) || m.transparent || !simpleDrawn(o)) return;
+    const geo = o.geometry, at = geo.attributes;
+    if (!at.position || Object.keys(geo.morphAttributes).length || geo.drawRange.count !== Infinity || o.onBeforeRender !== plainProto ||
+      Object.values(at).some((a) => a.usage === THREE.DynamicDrawUsage)) return;
+    const lf = leafG(o), cross = !!u && u.rigid && !(u.slide && u.slide[0]);
+    if (!lf) return;
+    const sig = Object.keys(at).sort().map((k) => k + at[k].itemSize + at[k].array.constructor.name + at[k].normalized).join(",");
+    // (small: off the contact shadow's layer, scene.js; the merged mesh keeps that)
+    const key = [u ? u.id : "", cross ? "*" : lf.uuid, m.uuid, sig, !!o.userData.small, o.castShadow, o.receiveShadow, o.renderOrder, o.frustumCulled].join("|");
+    let s = sets.get(key); if (!s) sets.set(key, s = { u, m, ms: [], regs: new Set() });
+    s.ms.push(o); if (r) s.regs.add(r);
+  });
+  // the pose the copies are made in: open flat, every registered piece at home (then put back as it was)
+  const a0 = S.ang, lm = S.lastMove, pos0 = S.reg.map((r) => r.obj.position.clone()), gx = {};
+  Object.keys(g).forEach((k) => { gx[k] = g[k].position.x; });
+  try {
+    S.setFold(180); Object.keys(g).forEach((k) => { g[k].position.x = g[k].userData.foldX || 0; });
+    S.reg.forEach((r) => r.obj.position.copy(r.base));
+    S.asm.updateMatrixWorld(true);
+    let n = 0;
+    sets.forEach((s) => {
+      if (s.ms.length < 2) return;
+      const lead = s.ms[0], P = leafG(lead), toP = new THREE.Matrix4().copy(P.matrixWorld).invert();
+      const gs = s.ms.map((o) => { const t = new THREE.Matrix4().multiplyMatrices(toP, o.matrixWorld), c = o.geometry.clone().applyMatrix4(t);
+        if (t.determinant() < 0) flipWinding(c);   // a mirrored piece: keep its faces facing out
+        return c; });
+      const idx = gs.every((x) => x.index), geo = mergeGeometries(idx ? gs : gs.map((x) => (x.index ? x.toNonIndexed() : x)), false);
+      gs.forEach((x) => x.dispose());
+      if (!geo) return;
+      const mesh = new THREE.Mesh(geo, s.m);
+      mesh.name = "merged." + (s.u ? s.u.id : "loose") + "-" + n++;
+      Object.assign(mesh, { castShadow: lead.castShadow, receiveShadow: lead.receiveShadow, renderOrder: lead.renderOrder, frustumCulled: lead.frustumCulled });
+      const parts = new Set(s.ms.map((o) => o.userData.part));
+      // (host: it draws in the label check's id pass, as a part's own small mesh does; in Simple every piece of it names
+      // its unit there)
+      Object.assign(mesh.userData, { merged: true, unit: s.u, small: !!lead.userData.small, host: s.ms.some((o) => hostSet.has(o)) });
+      if (parts.size === 1 && lead.userData.part) mesh.userData.part = lead.userData.part;
+      // (drawn until the first frame's update: the start-up warm-up sends its geometry to the GPU with the rest)
+      P.add(mesh);
+      const inv = new THREE.Matrix4().multiplyMatrices(toP, lead.matrixWorld).invert();
+      const rel = s.ms.map((o) => new THREE.Matrix4().multiplyMatrices(toP, o.matrixWorld));
+      MG.push({ mesh, u: s.u, P, lead, inv, ms: s.ms, rel, regs: [...s.regs], on: null });
+    });
+  } finally {
+    S.reg.forEach((r, i) => r.obj.position.copy(pos0[i]));
+    S.setFold(a0); S.lastMove = lm; Object.keys(g).forEach((k) => { g[k].position.x = gx[k]; });
+    S.asm.updateMatrixWorld(true);
+  }
+}
+function flipWinding(geo) {
+  if (geo.index) { const a = geo.index.array; for (let i = 0; i + 2 < a.length; i += 3) { const t = a[i + 1]; a[i + 1] = a[i + 2]; a[i + 2] = t; } return; }
+  Object.values(geo.attributes).forEach((at) => { const a = at.array, k = at.itemSize;
+    for (let i = 0; i + 3 * k <= a.length; i += 3 * k) for (let j = 0; j < k; j++) { const t = a[i + k + j]; a[i + k + j] = a[i + 2 * k + j]; a[i + 2 * k + j] = t; } });
+}
+// each frame, after every piece and group is placed: which merged meshes draw, and where
+function updateMerged() {
+  const rest = simpleOn() && S.simple === 1 && S.ang > 179.999, sel = S.sel && S.sel.mesh && S.sel.mesh.userData.unit;
+  for (const G of MG) {
+    const u = G.u, on = rest && (!u || (S.liftUnit !== u && !(liftedU === u && S.liftE > 0) && sel !== u)) &&
+      G.regs.every((r) => r.out === 0) && G.ms.every(shown);
+    if (on !== G.on) {
+      G.on = on; G.mesh.visible = on;
+      G.ms.forEach((o) => { if (on) { o.userData.mask0 = o.layers.mask; o.layers.mask = 0; } else if (o.userData.mask0 !== undefined) o.layers.mask = o.userData.mask0; });
+      invalidateShadow();
+    }
+    if (!on) continue;
+    // the leader's move since home, in the group's frame
+    G.lead.updateWorldMatrix(true, false);
+    _mm.copy(G.P.matrixWorld).invert().multiply(G.lead.matrixWorld).multiply(G.inv);
+    _mm.decompose(G.mesh.position, G.mesh.quaternion, G.mesh.scale);
+    if (params.shot) checkMerged(G);
+  }
+}
+// (the stills: every piece of a drawn merged mesh where the merged mesh draws it)
+function checkMerged(G) {
+  G.mesh.updateMatrix(); _mi.copy(G.P.matrixWorld).invert();
+  G.ms.forEach((o, i) => { o.updateWorldMatrix(true, false);
+    const a = _mm.multiplyMatrices(_mi, o.matrixWorld).elements, b = new THREE.Matrix4().multiplyMatrices(G.mesh.matrix, G.rel[i]).elements;
+    const d = Math.max(Math.abs(a[12] - b[12]), Math.abs(a[13] - b[13]), Math.abs(a[14] - b[14]), ...[0, 1, 2, 4, 5, 6, 8, 9, 10].map((k) => Math.abs(a[k] - b[k]) * 100));
+    if (d > 0.001 && !G.bad) { G.bad = true; (FC().errors || []).push(G.mesh.name + ": " + (o.name || (o.userData.part ? o.userData.part.id : "a piece")) + " is " + d.toFixed(3) + " mm off its merged copy"); } });
 }
 
 // one entry's exploded offset in layout V at full explode, in its group's frame (the group's own half move is
@@ -267,7 +380,7 @@ function measureBases() {
   return g;
 }
 
-/* ---------- framing (F7) ----------
+/* ---------- framing ----------
    The stack's target pose (explode = 1, fold 180°, where every group frame equals the assembly frame) is fitted to the
    free part of the viewer: the viewer less the title and readouts at the top, the button bar at the bottom, the
    finish and zoom pill at the side, the part card while it is open, and on a wide screen the two label columns. Every
@@ -357,7 +470,7 @@ function freeRect(W, Hh) {
 // px kept free at each side for the label columns (label width + margin + elbow)
 const colReserve = (W) => (W < 600 ? 0 : Math.min(260, W * 0.17));
 
-/* ---------- the Mechanical view (FABLE-REVIEW-1 F8, WP5) ----------
+/* ---------- the Mechanical view ----------
    What it draws is what FC_PARTS.mechanical names: the frames, the mid-frames and the whole hinge. Every mesh one of
    its entries names carries the entry (userData.mech): a registered piece without one is lifted off and hidden, as the
    other steps do it; the frame bodies, their inner walls and the marks on them are not registered (they never leave
@@ -380,7 +493,7 @@ const GHOST_OPACITY = 0.3;
 const MV = { az: 0.6, el: 0.8, ang: 90, fill: 0.86, portraitFill: 0.7 };
 // what the camera is fitted to: the middle hinge module, its swing arms and the halves' hinge ends beside it (each
 // piece's box cut to this, in its group's frame), so the gears and the screen's loop are big enough to watch and the
-// frames run out of the view (FABLE-REVIEW-2 N1: fitted to the whole hinge, the 2 mm gears were 6 px tall). Earlier
+// frames run out of the view (fitted to the whole hinge, the 2 mm gears were 6 px tall). Earlier
 // tries, by eye on the stills: the whole structure (the hinge a thin strip in the middle), the whole hinge (the
 // mechanism too small), from the back (the cover hides the gears, which sit in pockets open toward the screen), from
 // the side, and lower down into the V (the halves fill the view)
@@ -439,7 +552,7 @@ function ghosts(on) {
   if (!on) nearGhost(null);
   invalidateShadow();
 }
-/* Below NEAR_DEG the two halves close over the hinge and their frames hide it (FABLE-REVIEW-2 N1: at 0° to 30° the
+/* Below NEAR_DEG the two halves close over the hinge and their frames hide it (at 0° to 30° the
    labels pointed at slivers). The half nearer the camera is then drawn see-through too, its frame, mid-frame and the
    marks on its frame, so the loop of the screen and the plates round it show through it; which half is nearer is the
    one whose back faces the camera. Re-chosen whenever the view or the fold changes (nearGhost). */
@@ -542,9 +655,9 @@ function fitMech(keepZoom) {
     invalidate();
   }
 }
-/* The caption (FABLE-REVIEW-2 N1): one line on what the mechanism is doing at this fold angle, from
+/* The caption: one line on what the mechanism is doing at this fold angle, from
    FC_PARTS.mechCaptions ([up to this angle, text], in order); shown only in the Mechanical view.
-   Where it sits (F2; it sat under the readout, crowding the size line, and a label's dot landed on it): on a wide
+   Where it sits (it sat under the readout, crowding the size line, and a label's dot landed on it): on a wide
    viewer at the bottom left, just above the hint line (or the button bar, whichever is higher), inside the room the
    left label column keeps free (colReserve), so it covers none of the rectangle the view is fitted to; on a phone,
    where the hint is hidden and the readout sits at the left under Options, just under the readout. Either way it is
@@ -617,7 +730,7 @@ export function updateTeardown(dt, snap) {
     for (let i = 0; i < D2K.length; i++) D2K[i].visible = !noD2 && !(noTape && D2K[i].userData.detail === 2) && !D2K[i].userData.onlyHidden;
   }
   const half = VD.half + (VS.half - VD.half) * s;
-  // (added to the fold's own offset: with hinge v2 the spine and the deck sit off the origin as they turn, exterior.js)
+  // (added to the fold's own offset: with two pivots the spine and the deck sit off the origin as they turn, exterior.js)
   Object.keys(g).forEach((k) => { g[k].position.x = (g[k].userData.foldX || 0) + e * half * XL[k]; });
   // exploded: lay the open phone flat so the levels rise straight up: screen up (turn about x), or first turned over
   // about its long axis (y), back up. Between the two layouts it rolls over like a page.
@@ -625,6 +738,8 @@ export function updateTeardown(dt, snap) {
   asm.position.set(S.center[0] + (fitC.pos.x - S.center[0]) * e, fitC.pos.y * e, S.center[1] + (fitC.pos.z - S.center[1]) * e);
   // the Mechanical view holds the spine still while the halves swing about it (HOLD)
   if (S.mechE > 0) { const th = holdPose(g.spine); asm.rotation.y += th * S.mechE; asm.position.lerp(_hp, S.mechE); }
+  // at rest in Simple, each unit draws as one mesh per material
+  if (prepped) updateMerged();
   // and nearly shut, sees through the half nearer the camera; its caption says what the mechanism is doing
   if (ghostOn) nearGhost(nearHalf());
   caption();
@@ -641,7 +756,7 @@ export function updateTeardown(dt, snap) {
 }
 let overlapsDue = true;
 
-/* ---------- overlap count (BUILD-SPEC 6.6 item 6, G1-11) ----------
+/* ---------- overlap count ----------
    At explode = 1: every visible registered entry's box in assembly coords (children included; ribbons are not
    registered). Pairs on different levels whose boxes overlap by more than 0.05 mm on all three axes are counted.
    Same-level pieces may nest by design (the camera bracket round the cameras; in Simple, a unit's own members, and
@@ -666,7 +781,7 @@ function countOverlaps() {
 }
 function shown(o) { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; }
 
-/* ---------- flex ribbons (BUILD-SPEC 6.5 item 2, 7.3; R4 5.3) ----------
+/* ---------- flex ribbons ----------
    One BufferGeometry per cable, rewritten while anything moves. Assembled: a Catmull-Rom route through the ends and
    the via points (each via rides its own group, so the route bends with the fold). Exploded: a cubic Bezier whose
    handles leave each connector along its `n`, long when there is slack and short when pulled tight. The two are
@@ -696,7 +811,7 @@ function buildRibbons() {
       if (!grp) throw new Error("ribbon " + f.id + ": unknown group '" + v.leaf + "'");
       return { g: grp, p: v.leaf === "spine" ? v3(v.at) : mir(v.at, s), w: v.w ? (v.leaf === "spine" ? v3(v.w) : mir(v.w, s)).normalize() : null }; });
     // samples: every control point is a sample, and the segments between them share the rest by length (at 180°, where
-    // all group frames match), so bends keep their shape. At least 24 segments (BUILD-SPEC 7.3).
+    // all group frames match), so bends keep their shape. At least 24 segments.
     const ctrl = [ends[0].reg.base.clone().add(ends[0].local)].concat(vias.map((v) => v.p), [ends[1].reg.base.clone().add(ends[1].local)]);
     const nseg = ctrl.length - 1, N = Math.max(24, 3 * nseg), lens = [];
     for (let i = 0; i < nseg; i++) lens.push(Math.max(0.01, ctrl[i].distanceTo(ctrl[i + 1])));
@@ -759,7 +874,7 @@ function updateRibbons(e) {
     const V = rb.us.length; let L = 0;
     for (let i = 0; i < V; i++) { rb.cr.getPoint(rb.us[i], rb.A[i]); if (i) L += rb.A[i].distanceTo(rb.A[i - 1]); rb.s[i] = L; }
     for (let i = 0; i < V; i++) rb.s[i] = L > 0 ? rb.s[i] / L : i / (V - 1);
-    // exploded route: Bezier, handles along each end's n (R4 5.3)
+    // exploded route: Bezier, handles along each end's n
     if (e > 0) {
       const d = pts[0].distanceTo(pts[pts.length - 1]), h = THREE.MathUtils.clamp(0.35 * d + 0.6 * (L - d), 0.2 * d, 0.8 * L);
       rb.bz.v0.copy(pts[0]); rb.bz.v1.copy(pts[0]).addScaledVector(ea.nw, h);
@@ -812,7 +927,7 @@ function updateRibbons(e) {
    A part gets a label entry when parts.js says `label`; every unit gets an entry (its card and its taps use it), with a
    label button when it is labelled in Simple (`label`) or stands for its members elsewhere (`oneLabel`). A unit's
    label points at its main part, or, with none, at its biggest piece. Button text: the short name; aria-label: the
-   full name (F12). */
+   full name. */
 const SVGNS = "http://www.w3.org/2000/svg";
 const ALLQ = [];   // every entry with a label button
 const area = (b) => (b && !b.isEmpty() ? (b.max.x - b.min.x) * (b.max.y - b.min.y) : 0);
@@ -852,12 +967,12 @@ export function createLabels() {
   warmGhosts();
 }
 
-/* ---------- id picking (FABLE-REVIEW-1 F1, WP1) ----------
+/* ---------- id picking ----------
    Which part is in front at a point on screen? Every visible mesh of the model is drawn once more in a flat colour that
    is its id (24 bits in R, G, B; 0 = nothing), into a small render target, and the pixels are read back once. A label
    anchor is then seen when the id under it is its own part's, and a tap opens the part whose id is under the finger.
    This replaces one three.js raycast per anchor, each of which tested every triangle of every mesh it passed (0.3 to
-   1 s per label pass, F1). Ids: one per part (every mesh marked with the part shares it, so any piece of a part counts
+   1 s per label pass). Ids: one per part (every mesh marked with the part shares it, so any piece of a part counts
    as the part, as the raycasts did), then one per other mesh (they hide what is behind them but open nothing). As with
    the raycasts, anything drawn hides what is behind it, see-through films included. Each id material copies its mesh's
    side and polygon offset, so the faces that draw, and the decal that wins over the face under it, are the ones on
@@ -908,7 +1023,8 @@ function drawIds(cam, rt, partsOnly, bigOnly) {
   try {
     list.forEach((o) => {
       const ms = Array.isArray(o.material) ? o.material : [o.material], m = ms.find((x) => x.visible);
-      const k = keyOf(o, simple, mech), keep = !!m && (!partsOnly || !!k) && !(bigOnly && o.userData.small && !hosts.has(o)), see = !!o.userData.ghost;
+      // (a merged mesh of small pieces stands in for a part's own mesh when one of them is: userData.host)
+      const k = keyOf(o, simple, mech), keep = !!m && (!partsOnly || !!k) && !(bigOnly && o.userData.small && !hosts.has(o) && !o.userData.host), see = !!o.userData.ghost;
       _swap.push(o, o.material, o.visible, o.renderOrder);
       if (!keep) { o.visible = false; return; }
       o.material = idMat(k ? partId(k) : other++, m, see);
@@ -976,13 +1092,13 @@ function sameSig() { if (!haveSig || lastMode !== props.mode + (props.detail ? "
   return true; }
 
 /* Each drawn frame: project each anchor to the screen, hide hidden or covered ones, then place the labels.
-   Exploded: two side columns (BUILD-SPEC 7.4), each sorted by screen y, at least 22 px apart; leaders bend once (a
+   Exploded: two side columns, each sorted by screen y, at least 22 px apart; leaders bend once (a
    short diagonal, then a horizontal run). Other steps: labels beside their anchors, straight leaders (as before).
    force: run the label check now, whatever the view is doing (the page's __fc.perf hook times one). */
 let sizesKey = "", obst = null, obstKey = "";
 const _c = new THREE.Vector3(), _mw = new THREE.Vector3();
 // is this entry's label up in the current view? Simple exploded: the units'; elsewhere the parts' own, except where
-// their unit gives one label for them all (oneLabel, F9)
+// their unit gives one label for them all (oneLabel)
 function active(q) {
   if (mechOn()) return !!q.mech;
   if (q.mech) return false;
@@ -1018,7 +1134,7 @@ export function layoutLabels(cam, force) {
   const key = W + "x" + Hh + (cols ? "c" : "s");
   if (key !== sizesKey) { sizesKey = key; ALLQ.forEach((q) => { q.bw = q.bh = 0; }); }
   let vis = [];
-  // (in the label columns a dot under a page control, the Mechanical caption say, is not seen either: F2)
+  // (in the label columns a dot under a page control, the Mechanical caption say, is not seen either)
   const ob = cols && check ? obstacles(W, Hh) : null;
   ALLQ.forEach((q) => {
     q.show = false; if (!active(q)) return;
@@ -1061,8 +1177,8 @@ function anchors(q, cp) {
   return d0 <= d1 ? q.cand[0] : q.cand[1];
 }
 /* In the side columns (exploded, Mechanical), the anchor points nearest the label's own column are tried first, so
-   the dot lands on the piece's outer edge and its leader crosses as little of the stack as it can (FABLE-REVIEW-2
-   N12: from the middle of each piece the leaders ran across the stack). The column is the side of the view the
+   the dot lands on the piece's outer edge and its leader crosses as little of the stack as it can (from
+   the middle of each piece the leaders ran across the stack). The column is the side of the view the
    piece's middle is on, as columns() decides it. */
 const _ow = new THREE.Vector3();
 function outward(q, list, cam, W) {
@@ -1074,7 +1190,7 @@ function outward(q, list, cam, W) {
   return idx.map((i) => list[i]);
 }
 // a part's two faces (mesh-local), from its measured box (children and instanced details included, and for the inner
-// screen the glass and display it is laminated to, F4), so a point never floats off the part; the centre is the
+// screen the glass and display it is laminated to), so a point never floats off the part; the centre is the
 // builder's anchor centre
 function partCand(q) {
   const r = q.reg, b = r && r.lbox, p = q.p;
@@ -1106,7 +1222,7 @@ function beside(vis, W) {
 // phone-sized screen (where the stack is wide and the labels go above and below it).
 function columns(vis, W, Hh, cam) {
   const parts = stackRects(cam, W, Hh), ob = obstacles(W, Hh).concat(parts), narrow = W < 600, m = narrow ? 8 : 24, gapX = 10;
-  // the stack's middle on screen decides the side (the framing shifts the stack off the camera's target, F7)
+  // the stack's middle on screen decides the side (the framing shifts the stack off the camera's target)
   const cx = parts.length ? (Math.min(...parts.map((r) => r.x0)) + Math.max(...parts.map((r) => r.x1))) / 2 : W / 2;
   // the right column runs down the edge, or just inside the finish/zoom controls where they sit across the middle
   const side = ob.filter((o) => o.side)[0];
@@ -1114,7 +1230,7 @@ function columns(vis, W, Hh, cam) {
   const xR = side && (narrow || (side.y0 < Hh / 2 && side.y1 > Hh / 2)) ? side.x0 - gapX : W - m;
   const pitch = (q) => Math.max(22, q.bh + 3);
   // the columns end at the button bar's top: below it, beside the bar, a label sat in the corner with its leader run
-  // under an open card (FABLE-REVIEW-2 N13); the labels that do not fit move to the other side first (below)
+  // under an open card; the labels that do not fit move to the other side first (below)
   const bars = ob.filter((o) => o.bar), Hc = bars.length ? Math.min(Hh, Math.min(...bars.map((o) => o.y0)) + 8) : Hh;
   // balance the columns: each side takes its own labels up to what its free stretches hold; the overflow goes to the
   // other side, the labels nearest the middle first (on a phone the stack fills the width, and one side fills up)
@@ -1122,8 +1238,8 @@ function columns(vis, W, Hh, cam) {
   const cap = (sd) => { const I = freeIntervals(ob, sd < 0 ? m : xR - wAll, sd < 0 ? m + wAll : xR, Hc);
     return I.reduce((a, iv) => a + Math.floor((iv[1] - iv[0]) / ph), 0); };
   const cL = cap(-1), cR = cap(1);
-  /* zoomed in, the model reaches the edges and the columns have little or no free room: all the labels were dropped
-     (FABLE-REVIEW-2 N2). When the columns would keep fewer than half the labels (each side holds what its free
+  /* zoomed in, the model reaches the edges and the columns have little or no free room: all the labels were dropped.
+     When the columns would keep fewer than half the labels (each side holds what its free
      stretches fit, the overflow moving to the other side as below), every label goes beside its anchor instead, over
      the model (the pills are almost opaque), stacked so none overlap */
   { const n = vis.length, n0 = vis.filter((q) => q.sx < cx).length, lo0 = Math.max(0, n - cR), hi0 = Math.min(n, cL);
@@ -1170,7 +1286,7 @@ function columns(vis, W, Hh, cam) {
   FC().labelOverlaps = labelOverlaps(vis.filter((q) => q.show), parts);
 }
 
-/* The columns' fallback when zoomed in (FABLE-REVIEW-2 N2): each label beside its anchor, on the anchor's side of the
+/* The columns' fallback when zoomed in: each label beside its anchor, on the anchor's side of the
    screen (as beside() does in the other steps), over the model, within the free height (clear of the readout, the
    button bar and an open card) and clear of the side pill; each side stacked in anchor order, a pitch apart, and
    pushed back up from the bottom if it runs over. A side that cannot hold its labels drops its least important. */
@@ -1194,7 +1310,7 @@ function overModel(vis, W, Hh, ob) {
   });
 }
 
-/* Label check (G2-12): shown labels whose boxes overlap each other, or overlap the phone on screen: the screen box of
+/* Label check: shown labels whose boxes overlap each other, or overlap the phone on screen: the screen box of
    any visible part, without the layout's 4 px padding. (Not one box round the whole stack: the exploded stack is a
    diagonal staircase, and on a phone-sized viewer the labels rightly sit in the empty corners of that box.)
    build/shoot.py fails an exploded view above 0. With ?explodecheck=1 the offending labels are listed with console.log.
@@ -1230,7 +1346,7 @@ function stackRects(cam, W, Hh) {
   if (mechOn()) MX.forEach(one);
   return out;
 }
-/* For the check (build/shoot.py, FABLE-REVIEW-2 N12): the screen box (viewer px) round every visible piece of a unit
+/* For the check (build/shoot.py): the screen box (viewer px) round every visible piece of a unit
    ({ unit: id }) or of a part ({ part: id }), or null. */
 FC().screenBox = (sel) => {
   if (!S.cam) return null;
@@ -1277,17 +1393,21 @@ function freeIntervals(ob, bx0, bx1, Hh) {
 }
 
 /* ---------- click a part, a unit or a label to read about it ----------
-   A part's card: what it is, its size, spec, note and sources. A unit's card (a unit with `what`, parts.js): what it
-   is, then what is on it or in it, one row per member; tapping a row lights that part up and opens its own card, with
+   A part's card: its name, what it does (`what`, one or two sentences), then Size and Spec (a battery cell's capacity
+   leads its Spec). Nothing else: the brochure shows no tags, notes or sources.
+   A unit's card (a unit with `what`, parts.js): its name and what it does, then what is on it or in it, one row per
+   member, and a Spec row for a unit with battery cells; tapping a row lights that part up and opens its own card, with
    a way back. While a unit's card is open in Simple, its members lift EX.lift mm off its main part, so what is on it
-   shows apart (FABLE-REVIEW-1 F6). A unit without `what` opens its main part's card. */
+   shows apart. A unit without `what` opens its main part's card. A Mechanical entry's card is a
+   unit card with no rows. build/copycheck.py --cards reads every card's text through FC().cardTexts below. */
 S.card = null;   // { q } a part's card, { u } a unit's, { q, u } a part opened from its unit's card
 function sizeText(p) { if (p.rad) return "Ø" + fmt(p.rad * 2) + " × " + fmt(p.z[1] - p.z[0]);
   return fmt(p.x[1] - p.x[0]) + " × " + fmt(p.y[1] - p.y[0]) + " × " + fmt(p.z[1] - p.z[0]); }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-const srcLinks = (keys) => { const src = window.FC_PARTS.sources;
-  return keys.length ? '<p class="pc-s">' + keys.map((k) => '<a href="' + src[k].u + '" target="_blank" rel="noopener">' + esc(src[k].t) + '</a>').join(" · ") + '</p>' : ""; };
-// the accent highlight on one mesh; a material array (the keycap pattern) is copied piece by piece (F13)
+const mAhText = (n) => n.toLocaleString("en-GB") + " mAh";
+// a part's Spec line: a cell's capacity (worked out in parts.js), then its spec text
+const specText = (p) => [p.mAh ? mAhText(p.mAh) : "", p.spec || ""].filter(Boolean).join(". ");
+// the accent highlight on one mesh; a material array (the keycap pattern) is copied piece by piece
 function lightUp(q) {
   const hl = (m) => { const h = m.clone(); if (h.emissive) { h.emissive = new THREE.Color(S.accent); h.emissiveIntensity = 0.45; } return h; };
   q.orig = q.mesh.material; q.mesh.material = Array.isArray(q.orig) ? q.orig.map(hl) : hl(q.orig); S.sel = q;
@@ -1309,32 +1429,30 @@ export function select(q, back) {
   if (q.u) { showUnit(q.u); return; }
   lightUp(q); S.card = { q, u: back || null };
   const p = q.p;
+  const spec = specText(p);
+  // (a part with no spec, such as a keyboard half's copy that the parts list leaves out, shows Size alone)
   openCard((back ? '<button class="pc-back" type="button">‹ ' + esc(back.name) + '</button>' : '') +
-    // (the keyboard half's copy of a part, skipTable in parts.js, has no tag: its card shows none rather than throwing)
-    '<div class="pc-h"><b>' + esc(p.name) + '</b>' + (p.tag ? '<span class="chip ' + p.tag.toLowerCase() + '">' + p.tag + '</span>' : '') + '</div>' +
-    (p.what ? '<p>' + esc(p.what) + '</p>' : '') +
-    '<dl><dt>Size</dt><dd>' + sizeText(p) + ' mm</dd>' + (p.mAh ? '<dt>Capacity</dt><dd>' + p.mAh.toLocaleString("en-GB") + ' mAh</dd>' : '') +
-    (p.spec ? '<dt>Spec</dt><dd>' + esc(p.spec) + '</dd>' : '') + '</dl>' +
-    (p.note ? '<p class="pc-n">' + esc(p.note) + '</p>' : '') + srcLinks(p.src || []));
+    '<div class="pc-h"><b>' + esc(p.name) + '</b></div>' + (p.what ? '<p>' + esc(p.what) + '</p>' : '') +
+    '<dl><dt>Size</dt><dd>' + sizeText(p) + ' mm</dd>' + (spec ? '<dt>Spec</dt><dd>' + esc(spec) + '</dd>' : '') + '</dl>');
   if (back) cardEl.querySelector(".pc-back").addEventListener("click", () => select(UQ[back.id]));
 }
 const partQ = (id) => S.parts.find((x) => x.p.id === id && x.mesh);
 function showUnit(u) {
   if (!u.what) { const mq = partQ(u.main); if (mq) select(mq); return; }
   const D = window.FC_PARTS, byId = (id) => D.parts.find((p) => p.id === id), mem = u.members.map(byId).filter(Boolean);
-  const mAh = mem.reduce((a, p) => a + (p.mAh || 0), 0), src = [...new Set(mem.reduce((a, p) => a.concat(p.src || []), u.src || []))];
+  const mAh = mem.reduce((a, p) => a + (p.mAh || 0), 0);
   const rows = (u.list || []).filter((x) => byId(x[0])).map(([id, where, role]) => '<li><button type="button" data-part="' + esc(id) + '">' +
     (where ? '<span class="pc-pos">' + esc(where) + '</span>' : '') + '<b>' + esc(byId(id).name) + '</b><small>' + esc(role) + '</small></button></li>').join("");
   S.card = { u };
-  openCard('<div class="pc-h"><b>' + esc(u.name) + '</b>' + (u.tag ? '<span class="chip ' + u.tag.toLowerCase() + '">' + u.tag + '</span>' : '') + '</div><p>' + esc(u.what) + '</p>' + (rows ? '<ul class="pc-list">' + rows + '</ul>' : '') +
-    (mAh ? '<dl><dt>Capacity</dt><dd>' + mAh.toLocaleString("en-GB") + ' mAh in all</dd></dl>' : '') + srcLinks(src));
+  openCard('<div class="pc-h"><b>' + esc(u.name) + '</b></div><p>' + esc(u.what) + '</p>' + (rows ? '<ul class="pc-list">' + rows + '</ul>' : '') +
+    (mAh ? '<dl><dt>Spec</dt><dd>' + mAhText(mAh) + ' in all</dd></dl>' : ''));
   cardEl.querySelectorAll("[data-part]").forEach((b) => b.addEventListener("click", () => { const q = partQ(b.dataset.part); if (q) select(q, u); }));
   // the lift: each member whose middle lies beyond the main part's back or front face moves EX.lift mm further that
   // way (pieces level with it stay), so the chips leave the board and the boards under it drop away. Depths are the
   // parts' own (parts.js z), else the measured box, not the box with the main part's connectors and screws in it.
   const mr = UQ[u.id] && UQ[u.id].reg, zr = (r) => { const p = r.obj.userData.part; return p && p.z ? p.z : [r.lbox.min.z, r.lbox.max.z]; };
   if (mr && mr.lbox && simpleOn()) {
-    S.liftUnit = u; const [m0, m1] = zr(mr);
+    S.liftUnit = liftedU = u; const [m0, m1] = zr(mr);
     S.reg.forEach((r) => { r.liftDir = 0; if (r.u !== u || r === mr || !r.lbox || r.lbox.isEmpty()) return;
       const z = zr(r), mz = (z[0] + z[1]) / 2; r.liftDir = mz < m0 ? -1 : mz > m1 ? 1 : 0; });
   }
@@ -1349,24 +1467,26 @@ export function pick(e) {
   const k = idParts[idUnder(e.clientX, e.clientY, true)], q = !k ? null : MQ[k.id] && MQ[k.id].u === k ? MQ[k.id] : k.members ? UQ[k.id] : S.parts.find((x) => x.p === k);
   if (q) select(q); else if (props.mode === "whole" || !cardEl.hidden) select(null); }
 
-// for the check (build/shoot.py; FABLE-REVIEW-2 N13): the shown labels whose top is below the button bar's top
+// for the check (build/shoot.py): the shown labels whose top is below the button bar's top
 FC().labelsBelowBar = () => {
   const bars = [...root.querySelectorAll(".bar .pill")].map((e) => e.getBoundingClientRect()).filter((r) => r.height);
   if (!bars.length) return [];
   const top = Math.min(...bars.map((r) => r.top));
   return ALLQ.filter((q) => q.show && q.el.getBoundingClientRect().top > top).map((q) => q.name);
 };
-/* for the check (build/shoot.py; FABLE-REVIEW-2 N9b): the drawn meshes of the model, counted by kind, so a still can
+/* for the check (build/shoot.py): the drawn meshes of the model, counted by kind, so a still can
    prove what a view leaves out. detail2: pieces only High detail draws, by their kind (internals.js detail 2) or look
    (FC_PARTS.detail.looks); hingeD2: the hinge's small pieces, by name (FC_PARTS.detail.hinge); noMech: pieces no
    Mechanical entry names (userData.mech); ribbons: the flex cables and their stiffeners; all: every drawn mesh. A mesh
-   counts when it and every parent are visible (as three.js draws it). With names: the first few names of each kind. */
+   counts when it and every parent are visible and it is on the camera's layer (as three.js draws it: a piece drawn as
+   part of its unit's merged mesh is not, and the merged mesh counts once). With names: the first few names of each
+   kind. */
 FC().census = (names) => {
   const out = { all: 0, detail2: 0, hingeD2: 0, noMech: 0, ribbons: 0 }, nm = { detail2: [], hingeD2: [], noMech: [] };
   if (!S.asm) return null;
   const add = (k, o) => { out[k]++; if (names && nm[k] && nm[k].length < 8) nm[k].push(o.name || (o.userData.part ? o.userData.part.id : "") || (o.parent && o.parent.name ? "in " + o.parent.name : "unnamed")); };
   if (!D2LOOK) d2(S.asm);
-  S.asm.traverseVisible((o) => { if (!o.isMesh) return; out.all++;
+  S.asm.traverseVisible((o) => { if (!o.isMesh || !o.layers.isEnabled(0)) return; out.all++;
     if (o.userData.detail === 2 || D2LOOK.has(o.material)) add("detail2", o);
     if (HINGE_D2 && HINGE_D2.test(o.name || "")) add("hingeD2", o);
     if (!o.userData.mech) add("noMech", o);
@@ -1374,7 +1494,7 @@ FC().census = (names) => {
   if (names) out.names = nm;
   return out;
 };
-/* for the check (build/shoot.py; FABLE-REVIEW-2 N9c): the widest slot beside the spine, in mm, measured by what shows
+/* for the check (build/shoot.py): the widest slot beside the spine, in mm, measured by what shows
    there, not by how dark it is. Along the lines across the spine (hinge.js slotLines) each point is either the outside
    skin (the spine cover's outer shell, the back covers and the keyboard half's face: the "back", "cover" and
    "coverscreen" layers; the frames, rails and their ends) or a gap: the inside of the phone (the hinge's own pieces
@@ -1456,7 +1576,7 @@ FC().slotGap = () => {
   });
   return out;
 };
-/* for the check (build/shoot.py; F2): what the Mechanical caption overlaps, as names: the title, the readout, Options,
+/* for the check (build/shoot.py): what the Mechanical caption overlaps, as names: the title, the readout, Options,
    the side pill, the button bar, the hint line or an open card; a shown label; a label's leader or dot; or the edge of
    the viewer. [] when it is clear; null when no caption shows. */
 FC().capClear = () => {
@@ -1484,6 +1604,17 @@ FC().capClear = () => {
 // for main.js: how many labels show; open a unit's or a part's card by id (?card=)
 export function labelCount() { return ALLQ.filter((q) => q.show).length; }
 export function showCard(id) { const q = UQ[id] || MQ[id] || partQ(id); if (q) select(q); return !!q; }
+// for the copy check (build/copycheck.py --cards): every card's text as a visitor reads it, as [id, text], then the
+// card closes. Units and Mechanical entries first (a unit without `what` opens its main part's card), then every part
+// that has a mesh to tap, opened from its unit's card where that card lists it (so its way-back button shows too).
+FC().cardTexts = () => {
+  const out = [], read = (id, q, back) => { select(q, back); out.push([id, cardEl.innerText]); };
+  UNITS.forEach((u) => { if (UQ[u.id]) read(u.id, UQ[u.id]); });
+  MECH.forEach((u) => { if (MQ[u.id]) read(u.id, MQ[u.id]); });
+  S.parts.forEach((q) => { if (q.mesh) read(q.p.id, q, UNITS.find((u) => u.what && (u.list || []).some((x) => x[0] === q.p.id))); });
+  select(null);
+  return out;
+};
 
 /* ---------- wire up the controls ---------- */
 Object.keys(mbtns).forEach((n) => mbtns[n] && mbtns[n].addEventListener("click", () => setMode(n)));

@@ -1,5 +1,5 @@
 /* Fold Communicator — shared state and tables.
-   Every module reads these; nobody redefines them. Frozen after B0 (BUILD-SPEC 5.1). */
+   Every module reads these; nobody redefines them. */
 
 /* ---------- page state (what the controls change) ---------- */
 export const props = {
@@ -9,7 +9,7 @@ export const props = {
   keyBacklight: true,
   autoRotate: false,
   innerLayout: "split",
-  duo: false,          // iPhone Duo-style opening: screens blur, zoom and hand over as the hinge moves
+  duo: false,          // screen hand-over: screens blur, zoom and hand over as the hinge moves
   labels: true,
   mode: "whole",       // teardown step, see MODES in teardown.js
   detail: false        // High detail exploded view (Options); off = the Simple exploded view (teardown.js)
@@ -25,7 +25,7 @@ export const finishes = {
 export const fin = () => finishes[props.finish] || finishes.porcelain;
 
 // camera presets behind the view buttons. wide: the width (mm, at the target) the view must show; on a narrow portrait
-// viewer the camera backs off only that far, so the phone fills the width there (scene.js viewK; FABLE-REVIEW-2 D7).
+// viewer the camera backs off only that far, so the phone fills the width there (scene.js viewK).
 // Chosen on a 390 × 844 viewer: shut, the phone fills about 65 % of the width, as much as its height allows between the
 // readout and the button bar; open, about 75 % (clear of the finish swatches at the right edge)
 export const views = {
@@ -51,11 +51,11 @@ export const GEO = (() => {
   };
 })();
 
-/* ---------- URL parameters (BUILD-SPEC 5.3) ---------- */
+/* ---------- URL parameters ---------- */
 export const params = {};
 new URLSearchParams(location.search).forEach((v, k) => { params[k] = v; });
 
-/* ---------- quality tiers (BUILD-SPEC 4.3; B1 acts on them) ---------- */
+/* ---------- quality tiers (scene.js acts on them) ---------- */
 export const QUALITY = {
   low:  { dpr: 1.25, physical: "glass", clearcoat: false, aniso: false, iridescence: false, relief: "bump", env: 128,
           shadow: { size: 256, every: 4 }, passives: false, springSegs: 6, duoScale: 0.25,
@@ -71,19 +71,19 @@ export const QUALITY = {
 export const Q = { tier: "mid", ...QUALITY.mid };
 export function setTier(name) { if (QUALITY[name]) Object.assign(Q, QUALITY[name], { tier: name }); return Q; }
 
-// performance budget per tier (BUILD-SPEC 8); build/shoot.py fails a view over it
+// performance budget per tier; build/shoot.py fails a view over it
 export const BUDGET = {
   low:  { calls: 250, tris: 400000,  texMB: 48 },
   mid:  { calls: 350, tris: 800000,  texMB: 120 },
   high: { calls: 450, tris: 1200000, texMB: 144 }
 };
-// frame-cost budget (FABLE-REVIEW-1 WP0), set for the check PC at 390 × 844, Low, device pixel ratio 3; phones are
+// frame-cost budget, set for the check PC at 390 × 844, Low, device pixel ratio 3; phones are
 // 3 to 5 times slower on the processor, so it is deliberately tight. build/shoot.py --perf presses each mode button
 // from Hero with labels on (no ?shot) and reads __fc.perf; its stills run checks `modes` on the hero view and `shots`
 // on the named stills.
-// `until` names work packages expected to bring the page inside it. While it is set, shoot.py prints FAIL for every
-// number over budget but fails the run on them only with --strict-perf. Cleared ("") since WP1 (labels without
-// raycasts) and WP2 (draw only what shows) landed: every run now fails on these numbers.
+// `until` names the work expected to bring the page inside it. While it is set, shoot.py prints FAIL for every
+// number over budget but fails the run on them only with --strict-perf. Empty (""), as now: every run fails on these
+// numbers.
 function allTiers(cap) { return { low: cap, mid: cap, high: cap }; }
 export const PERF_BUDGET = {
   until: "",
@@ -92,17 +92,17 @@ export const PERF_BUDGET = {
   minFrames: 100,          // frames drawn in windowMs during the move
   labelMs: 4,              // label layout (layoutLabels) per call at rest, any mode
   modes: { whole: allTiers({ calls: 80, tris: 90000 }) },  // per-mode caps; Whole is checked on the hero view
-  // per-still caps (FABLE-REVIEW-1 build plan): the Simple exploded view must be cheaper than the old one (199 calls,
-  // 296k triangles at Low); High detail keeps every piece. The Mechanical view (WP5) draws only the structure: 90
-  // calls (review F8; measured 73 to 75 at Low with hinge v2), and no more triangles than the Simple exploded view.
-  // The same caps at every tier (FABLE-REVIEW-2 N9d: High exploded drew 119 calls with no cap): the tiers change maps
-  // and shading, not what is drawn, so a still over its cap at Mid or High has grown at Low too
+  // per-still caps: the Simple exploded view must be cheaper than the old one (199 calls, 296k triangles at Low);
+  // High detail keeps every piece. The Mechanical view draws only the structure: 90 calls (measured 73 to 75 at Low),
+  // and no more triangles than the Simple exploded view. The same caps at every tier (High exploded once drew 119
+  // calls with no cap): the tiers change maps and shading, not what is drawn, so a still over its cap at Mid or High
+  // has grown at Low too
   shots: { exploded: allTiers({ calls: 120, tris: 200000 }), "exploded-detail": allTiers({ calls: 250, tris: 400000 }),
     mechanical: allTiers({ calls: 90, tris: 200000 }), "mechanical-shut": allTiers({ calls: 90, tris: 200000 }),
     "mechanical-zoom": allTiers({ calls: 90, tris: 200000 }) }
 };
 
-/* ---------- fixed views for stills (BUILD-SPEC 5.4) ----------
+/* ---------- fixed views for stills ----------
    cam: "mode" takes az, el and dist from that mode's view in teardown.js. ang is the fold angle in degrees.
    focus aims the camera at the matching meshes ("flag", "flag=value" or "part=<id>"); only hides every other mesh.
    detail: 1 = the High detail exploded view (else Simple). testCard: 1 = the inner screen shows a flat grey test card.
@@ -125,32 +125,61 @@ export const SHOTS = {
   kbdstack:   { mode: "explode", detail: 1, ang: 180, az: -0.7,  el: 0.45, focus: "kbd", only: "kbd", labels: 1 },
   hingeblock: { mode: "explode", detail: 1, ang: 180, az: -0.5,  el: 0.75, focus: "part=hinge-1", only: "hinge", dist: 60, labels: 0 },
   usb:        { mode: "whole",   ang: 0,   az: -0.35, el: -0.7, focus: "usb", dist: 120, labels: 0 },
-  // the High detail exploded view (WP4)
+  // the High detail exploded view
   "exploded-detail": { mode: "explode", detail: 1, ang: 180, cam: MODE_CAM, labels: 1 },
-  // hinge v2 (WP6): the back at part-open angles, where v1 showed a dark slot beside the spine; build/shoot.py counts
+  // the back at part-open angles, where an open slot beside the spine would show dark; build/shoot.py counts
   // near-black pixels over the spine on these four (0 allowed)
   back15:     { mode: "whole",   ang: 15,  az: Math.PI + 0.5, el: 0.12, dist: 470, labels: 0 },
   back30:     { mode: "whole",   ang: 30,  az: Math.PI + 0.5, el: 0.12, dist: 470, labels: 0 },
   back45:     { mode: "whole",   ang: 45,  az: Math.PI + 0.5, el: 0.12, dist: 470, labels: 0 },
   back90:     { mode: "whole",   ang: 90,  az: Math.PI + 0.5, el: 0.12, dist: 470, labels: 0 },
-  // the Mechanical view (WP5): its own fitted camera, at 90° open and nearly shut
+  // the Mechanical view: its own fitted camera, at 90° open and nearly shut
   mechanical:        { mode: "mechanical", ang: 90, cam: MODE_CAM, labels: 1 },
   "mechanical-shut": { mode: "mechanical", ang: 20, cam: MODE_CAM, labels: 1 },
-  // zoomed in to half the fitted distance on the middle module (FABLE-REVIEW-2 N2): the labels must stay (LABEL_MIN in
-  // build/shoot.py)
+  // zoomed in to half the fitted distance on the middle module: the labels must stay (LABEL_MIN in build/shoot.py)
   "mechanical-zoom": { mode: "mechanical", ang: 90, cam: MODE_CAM, zoom: 0.5, labels: 1 },
-  // the crease at 150° from the front, close up, on a flat grey test card (FABLE-REVIEW-2 N4): build/shoot.py compares
-  // the fold band's mean luminance with the halves' display beside it (CREASE_VIEWS)
+  // the crease at 150° from the front, close up, on a flat grey test card: build/shoot.py compares the fold band's
+  // mean luminance with the halves' display beside it (CREASE_VIEWS)
   crease150:  { mode: "whole",   ang: 150, az: 0.26,  el: 0.02, focus: "hinge", dist: 260, testCard: 1, labels: 0 },
-  // the top end of the fold open flat, close up from the screen side (FABLE-REVIEW-2 N3): build/shoot.py measures the
-  // step in the black bezel where the two halves meet (STEP_VIEWS). tgt: the bezel over the hinge at 180° (world mm)
+  // the top end of the fold open flat, close up from the screen side: build/shoot.py measures the step in the black
+  // bezel where the two halves meet (STEP_VIEWS). tgt: the bezel over the hinge at 180° (world mm)
   hingetop:   { mode: "whole",   ang: 180, az: 0,     el: 0.5,  tgt: [0, 59.8, 3.37], dist: 120, labels: 0 },
-  // the top end of the spine at 30° from above and behind (FABLE-REVIEW-2 N9c: the research's worst angles are end
-  // views): the dark-slot and slot-width checks as on back15 ... back90. tgt: the spine's top end at 30° (world mm)
-  top30:      { mode: "whole",   ang: 30,  az: Math.PI + 0.5, el: 0.95, tgt: [-35.3, 59, -19], dist: 110, labels: 0 }
+  // the top end of the spine at 30° from above and behind (an end view shows a slot at its worst): the dark-slot and
+  // slot-width checks as on back15 ... back90. tgt: the spine's top end at 30° (world mm)
+  top30:      { mode: "whole",   ang: 30,  az: Math.PI + 0.5, el: 0.95, tgt: [-35.3, 59, -19], dist: 110, labels: 0 },
+  // the camera island close up, from behind and above (tgt: its centre,
+  // world mm); the side keys and an antenna band close up, shut; the hero from just above the floor, so the contact
+  // shadow under the bottom edge shows (build/shoot.py's grounded check, GROUND_VIEWS)
+  island:     { mode: "whole",   ang: 0,   az: 3.5,   el: 0.25, tgt: [21.7, 33, -7.1], dist: 150, labels: 0 },
+  edge:       { mode: "whole",   ang: 0,   az: 1.45,  el: 0.12, focus: "sidekey", dist: 120, labels: 0 },
+  stand:      { mode: "whole",   ang: 0,   az: -0.62, el: 0.08, tgt: [0, -8, 0], dist: 500, labels: 0 },
+  // the bottom end of the fold from outside: end-on from below, shut, at 30°, 90°, 135° and open flat, from below and
+  // behind at 30°, and the top end at 90° from above. build/shoot.py reads the tone of the spine cover's end and of the
+  // frames' ends round it against the rails' (FOLDEND_VIEWS), and that nothing of the mechanism shows (MECH_VIEWS).
+  // tgt: the spine's end at that angle (world mm)
+  foldend0:   { mode: "whole",   ang: 0,   az: Math.PI, el: -1.35, tgt: [-35.5, -61, -0.6], dist: 100, labels: 0 },
+  foldend30:  { mode: "whole",   ang: 30,  az: Math.PI, el: -1.35, tgt: [-35.3, -61, -19], dist: 100, labels: 0 },
+  foldend90:  { mode: "whole",   ang: 90,  az: Math.PI, el: -1.35, tgt: [-34.8, -61, -35.5], dist: 100, labels: 0 },
+  foldend135: { mode: "whole",   ang: 135, az: Math.PI, el: -1.35, tgt: [-9.2, -61, -25.2], dist: 100, labels: 0 },
+  foldend180: { mode: "whole",   ang: 180, az: Math.PI, el: -1.35, tgt: [0, -61, 1.55], dist: 100, labels: 0 },
+  botfold30:  { mode: "whole",   ang: 30,  az: Math.PI + 0.5, el: -0.75, tgt: [-35.3, -61, -19], dist: 150, labels: 0 },
+  topend90:   { mode: "whole",   ang: 90,  az: Math.PI, el: 1.35, tgt: [-34.8, 61, -35.5], dist: 100, labels: 0 },
+  // the back and the front in the other four finishes (`back` and `front` are Porcelain): build/shoot.py's finish
+  // check (FINISH_VIEWS). finish: the swatch the still applies (as ?finish=, see below)
+  "back-graphite":  { mode: "whole", ang: 0, az: Math.PI + 0.5, el: 0.12, dist: 470, finish: "graphite", labels: 0 },
+  "back-sage":      { mode: "whole", ang: 0, az: Math.PI + 0.5, el: 0.12, dist: 470, finish: "sage", labels: 0 },
+  "back-clay":      { mode: "whole", ang: 0, az: Math.PI + 0.5, el: 0.12, dist: 470, finish: "clay", labels: 0 },
+  "back-cobalt":    { mode: "whole", ang: 0, az: Math.PI + 0.5, el: 0.12, dist: 470, finish: "cobalt", labels: 0 },
+  "front-graphite": { mode: "whole", ang: 0, az: 0, el: 0.02, dist: 440, finish: "graphite", labels: 0 },
+  "front-sage":     { mode: "whole", ang: 0, az: 0, el: 0.02, dist: 440, finish: "sage", labels: 0 },
+  "front-clay":     { mode: "whole", ang: 0, az: 0, el: 0.02, dist: 440, finish: "clay", labels: 0 },
+  "front-cobalt":   { mode: "whole", ang: 0, az: 0, el: 0.02, dist: 440, finish: "cobalt", labels: 0 }
 };
+// a still that names a finish: main.js applies ?finish= through the swatch buttons, so the row's finish becomes that
+// parameter (a ?finish= in the URL still wins)
+if (params.view && SHOTS[params.view] && SHOTS[params.view].finish && params.finish === undefined) params.finish = SHOTS[params.view].finish;
 
-/* ---------- frame hooks (BUILD-SPEC 4.4) ----------
+/* ---------- frame hooks ----------
    invalidate(): call after changing anything visible outside the loop. A no-op until scene.js swaps it in.
    addUpdater(fn): fn(dt) runs every frame before the render and returns true while it is still moving.
    addAfterRender(fn): runs after each main-scene render (label layout). */

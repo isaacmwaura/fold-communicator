@@ -1,13 +1,13 @@
-/* Fold Communicator — what the two screens show, the two selfie-camera holes, and the iPhone Duo-style hand-over.
-   Owner after B0: B4 (BUILD-SPEC 6.3). Every picture is drawn with canvas paths in the page font: generic app names
-   and line glyphs, no real app names or logos. */
+/* Fold Communicator — what the two screens show, the two selfie-camera holes, and the screen hand-over.
+   Every picture is drawn with canvas paths in the page font: generic app names and line glyphs, no real app names or
+   logos. */
 import * as THREE from "three";
 import { props, S, GEO, Q, params, invalidate } from "./state.js";
 import { $, cv, rr, tex, sm } from "./util.js";
 import { mat } from "./materials.js";
 import { tag } from "./teardown.js";
 
-const BLUR = [0, 3, 7, 12, 18, 26];   // Duo-style blur steps, in full-size canvas pixels
+const BLUR = [0, 3, 7, 12, 18, 26];   // hand-over blur steps, in full-size canvas pixels
 const FONT = "'IBM Plex Sans',sans-serif", MONO = "'IBM Plex Mono',monospace";
 const font = (w, px, mono) => w + " " + px + "px " + (mono ? MONO : FONT);
 
@@ -58,7 +58,7 @@ const CV = (() => {
   inner.hole = [inner.W * (0.5 + hi.x / (2 * DW)), inner.H * (1 - (hi.y + DH / 2) / DH)]; inner.holeR = hi.r * inner.W / (2 * DW);
   cover.hole = [cover.W * ((hc.x - CX) / CWd + 0.5), cover.H * (0.5 - (hc.y - CY) / CHt)]; cover.holeR = hc.r * cover.W / CWd;
   [inner, cover].forEach((c) => { c.sy = Math.round(c.hole[1]);   // the status bar is centred on the hole
-    // text sizes as fractions of canvas height (BUILD-SPEC 6.3 item 6); the status bar time is 22 px on both
+    // text sizes as fractions of canvas height; the status bar time is 22 px on both
     c.fs = { status: 22, label: Math.round(c.H * 0.016), title: Math.round(c.H * 0.026), body: Math.round(c.H * 0.021) }; });
   return { inner, cover };
 })();
@@ -204,9 +204,9 @@ function innerTex(T) {
   crease(g, mid, H);
   return tex(T, c);
 }
-/* the crease down the middle: a faint line about 1 mm wide (the canvas is 9.9 px per mm), as real phones show at flat
-   (research §7). It was a 5 mm band darkened 22 % with a bright line in it, which read as a trough at every angle
-   (FABLE-REVIEW-2 N4); the fold's shape now comes from the strip itself (hinge.js) */
+/* the crease down the middle: a faint line about 1 mm wide (the canvas is 9.9 px per mm), as a folding screen shows
+   at flat. It was a 5 mm band darkened 22 % with a bright line in it, which read as a trough at every angle; the
+   fold's shape now comes from the strip itself (hinge.js) */
 function crease(g, mid, H) {
   const cr = g.createLinearGradient(mid - 6, 0, mid + 6, 0);
   cr.addColorStop(0, "rgba(0,0,0,0)"); cr.addColorStop(.3, "rgba(0,0,0,.07)"); cr.addColorStop(.5, "rgba(255,255,255,.03)");
@@ -349,23 +349,30 @@ function pane(g, C, b, a, ac) {
 export let coverMat = null, dispMat = null;
 let screenEnv = null;
 // env: the studio environment texture. Screens get their own envMap, because envMapIntensity only scales a
-// material's own envMap since three.js r163 (BUILD-SPEC 4.2).
+// material's own envMap since three.js r163.
+// One glossy layer (the clearcoat went: with the specular layer it reflected the room twice, and
+// the screens turned milky from the side). The studio is dark now, so the glass shows black with the softboxes in it.
+// The reflection is 0.22 (an anti-reflection-coated cover glass, about 1 % head-on), not a higher 0.6:
+// seen from the side (the `side` still, 75° off the glass) glass reflects a quarter of what it sees, and at 0.6 the
+// studio's dark walls alone lift a black patch of the picture over 25 of 255 (build/shoot.py, the screen-black check).
+// The walls cannot be darker: the satin metal of the spine reflects the same wall and turned near black there (back45).
+const SCREEN_GLASS = { roughness: 0.04, envMapIntensity: 0.22 };
 export function createScreens(T, env) {
-  const scr = () => { const m = new T.MeshPhysicalMaterial({ color: 0x000000, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02, emissive: 0xffffff, envMap: env, envMapIntensity: 0.22 }); m.toneMapped = false; return m; };
+  const scr = () => { const m = new T.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, envMap: env, ...SCREEN_GLASS }); m.toneMapped = false; return m; };
   screenEnv = env; coverMat = S.coverMat = scr(); dispMat = S.dispMat = scr();
   S.coverMat.emissiveMap = S.baseCover = coverTex(T); S.dispMat.emissiveMap = S.baseInner = innerTex(T);
 }
 
 /* ---------- camera holes ----------
-   Real holes are cut in the panel, so they are meshes on top of the screen, not paint: the Duo effect zooms and
-   slides the screen picture, and the holes must stay put. Inner: top-right corner of the right half, as on the
-   Xiaomi 18 Fold (R3 §2). Cover: centred at the top of the cover screen. */
+   Real holes are cut in the panel, so they are meshes on top of the screen, not paint: the hand-over zooms and
+   slides the screen picture, and the holes must stay put. Inner: top-right corner of the right half. Cover:
+   centred at the top of the cover screen. */
 export function addScreenDetails(ctx) {
   const T = ctx.T, { OZ } = GEO;
   const lift = (m, units) => { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = units; return m; };
-  // the hole is black under the same glass as the screen round it, so it gets the screen's reflection (4.2), not a
+  // the hole is black under the same glass as the screen round it, so it gets the screen's reflection, not a
   // stronger one that would turn it grey
-  const discM = lift(new T.MeshPhysicalMaterial({ color: 0x000000, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02, envMap: screenEnv, envMapIntensity: 0.22 }), -4);
+  const discM = lift(new T.MeshStandardMaterial({ color: 0x000000, envMap: screenEnv, ...SCREEN_GLASS }), -4);
   const lensM = lift(mat("lens").clone(), -8);
   const ringM = lift(new T.MeshStandardMaterial({ color: 0x2a2c30, metalness: 0.6, roughness: 0.4 }), -4);
   Object.keys(HOLES).forEach((k) => { const h = HOLES[k], G = ctx.G[h.leaf];
@@ -385,12 +392,12 @@ export function repaintScreens() { if (!S.coverMat) return;
   invalidate();
 }
 
-/* ---------- iPhone Duo-style screen hand-over ----------
-   Apple's iPhone Duo ties its unfold animation to the hinge angle: the picture blurs, stretches and comes into
-   focus on the inner screen as the phone opens, instead of cutting from one screen to the other. Here the inner
-   screen starts dim, blurred and slightly zoomed and sharpens as the hinge nears 180°; the cover screen blurs out.
+/* ---------- screen hand-over ----------
+   The unfold animation follows the hinge angle: the picture blurs, stretches and comes into focus on the inner
+   screen as the phone opens, instead of cutting from one screen to the other. The inner screen starts dim, blurred
+   and slightly zoomed and sharpens as the hinge nears 180°; the cover screen blurs out.
    The blurred copies are drawn at Q.duoScale (½ or ¼) size without mipmaps: a blurred picture loses nothing at lower
-   resolution (BUILD-SPEC 4.3). */
+   resolution. */
 function blurSet(T, base) {
   const src = base.image, k = Q.duoScale || 0.5, w = Math.round(src.width * k), h = Math.round(src.height * k);
   return BLUR.map((px) => { if (!px) return base; const c = cv(w, h), g = c.getContext("2d");
@@ -404,7 +411,7 @@ function setScr(mat, t, k, z, slide) { mat.emissiveMap = t; mat.emissiveIntensit
 export function updateDuo(dt) {
   if (!S.coverMat) return false;
   // Normally the effect runs while the hinge moves (160 ms after each move). A still (?shot=1) can't catch a move,
-  // so with the Duo option on it holds the effect at full strength: the picture shows the screens as they look
+  // so with the hand-over option on it holds the effect at full strength: the picture shows the screens as they look
   // while the hinge passes through the still's angle (e.g. ?view=open&duo=1&ang=120).
   const hold = props.duo && !!params.shot;
   const tgt = props.duo && (hold || performance.now() - S.lastMove < 160) ? 1 : 0;

@@ -27,7 +27,7 @@
         var nogl = document.getElementById("nogl"), msg = document.getElementById("noload");
         if (fc.ready || !fc.errors.length || !msg || (nogl && !nogl.hidden)) return;
         var other = fc.errors.filter(function (e) { return net.test(e); }).length ? null : fc.errors[0];
-        if (other && !msg.dataset.fcText) msg.textContent = "The 3D view could not start: " + other + ". The dimension sheet below still works.";
+        if (other && !msg.dataset.fcText) msg.textContent = "The 3D view could not start: " + other + ". The rest of the page below still works.";
         msg.hidden = false;
       }, 10000);
     });
@@ -46,8 +46,19 @@
   }
 }
 </script>
-<title>Fold Communicator</title>
-<meta name="description" content="Fold Communicator: an interactive 3D render and dimension sheet for a concept foldable phone with a physical keyboard.">
+<title>Fold Communicator: a folding phone concept</title>
+<meta name="description" content="Fold Communicator: an interactive 3D design concept for a folding phone with a real keyboard outside and a 7.5-inch screen inside.">
+<!-- the preview a link to the page shows when shared (img/share.jpg: build/brochure-images.py renders it from the model).
+     og:image must be a full address for most sites that read it -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Fold Communicator: a folding phone concept">
+<meta property="og:description" content="A design concept for a folding phone with a real keyboard outside and a 7.5-inch screen inside. Turn it, open it and take it apart in 3D.">
+<meta property="og:url" content="https://isaacmwaura.github.io/fold-communicator/">
+<meta property="og:image" content="https://isaacmwaura.github.io/fold-communicator/img/share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A render of the Fold Communicator concept, shut: a cover screen above a keyboard.">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -76,19 +87,20 @@
   #viewer{position:relative;height:100vh;height:100svh;min-height:520px;overflow:hidden;color:#1c1d20;
     background:radial-gradient(62% 48% at 50% 42%,rgba(250,249,246,.75) 0%,rgba(250,249,246,0) 100%),
       linear-gradient(180deg,#f5f3ef 0%,#ebe8e3 45%,#e6e3de 64%,#dcd8d2 80%,#d3cfc8 100%)}
-  /* studio sweep (BUILD-SPEC 7.6): a vertical gradient with a lighter pool behind the model and a darker floor band */
+  /* studio sweep: a vertical gradient with a lighter pool behind the model and a darker floor band */
   #viewer.dark{color:#eceae6;background:radial-gradient(62% 48% at 50% 42%,rgba(52,56,61,.7) 0%,rgba(52,56,61,0) 100%),
       linear-gradient(180deg,#2a2d31 0%,#1d2023 45%,#16181b 64%,#101113 80%,#0a0b0c 100%)}
   #mount{position:absolute;inset:0;cursor:grab;touch-action:pan-y}
   .hud{position:absolute;pointer-events:none}
   .hud-tl{left:28px;top:24px;display:flex;flex-direction:column;gap:4px}
   .hud-tl h1{margin:0;font-size:17px;font-weight:600;letter-spacing:.005em}
-  .hud-tl p{margin:0;font:400 11px 'IBM Plex Mono',monospace;opacity:.6}
-  .hud-tr{right:28px;top:26px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;font:400 11px 'IBM Plex Mono',monospace}
+  .hud-tl p{margin:0;font:400 13px 'IBM Plex Sans',sans-serif;opacity:.7}
+  /* the live size readout: kept, but quieter than the product */
+  .hud-tr{right:28px;top:26px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;font:400 11px 'IBM Plex Sans',sans-serif;opacity:.8}
   .hud-tr #state{font-weight:500;font-size:12px}
-  .hud-tr #dims{font-size:13px;font-weight:500}
-  .hud-tr .k{opacity:.55}
-  /* the Mechanical view's caption, on its own (F2: under the readout it crowded the size line, and a label's dot landed
+  .hud-tr #dims{font:500 13px 'IBM Plex Mono',monospace}
+  .hud-tr .k{opacity:.6}
+  /* the Mechanical view's caption, on its own (under the readout it crowded the size line, and a label's dot landed
      on it). js/teardown.js (placeCap) sets its height on the page: on a wide screen at the bottom left, above the hint
      line, inside the left label column's room; on a phone just under the readout. A fixed width and three lines kept
      free whatever the angle, so the view's fit does not move as the caption changes. On an almost opaque pill like the
@@ -103,7 +115,7 @@
   .pill button:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
   .pill button.on{background:color-mix(in srgb,currentColor 15%,transparent)}
   .pill label{display:flex;align-items:center;gap:10px;padding:4px 12px;font:400 11px 'IBM Plex Mono',monospace}
-  /* the hinge slider's touch target: 12 px more above and below its 16 px track (FABLE-REVIEW-2 N11), taken back by
+  /* the hinge slider's touch target: 12 px more above and below its 16 px track, taken back by
      the margin so the bar keeps its height */
   .pill input[type=range]{width:140px;accent-color:currentColor;cursor:pointer;padding:12px 0;margin:-12px 0;box-sizing:content-box}
   .side{position:absolute;right:20px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;pointer-events:auto}
@@ -123,7 +135,7 @@
   .acc[aria-pressed="true"]{border-color:currentColor}
   .scroll-cue{position:absolute;left:50%;bottom:-2px;transform:translateX(-50%);font:400 11px 'IBM Plex Mono',monospace;opacity:.45;text-decoration:none;padding:4px 10px}
   /* teardown labels and part card (the label pills have no backdrop blur: each blurred pill re-reads the canvas behind
-     it on every frame, which a phone pays for; an almost opaque fill reads the same, FABLE-REVIEW-1 WP1) */
+     it on every frame, which a phone pays for; an almost opaque fill reads the same) */
   #labels{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .35s}
   #labels.on{opacity:1}
   #labels:not(.on) .plabel{pointer-events:none}
@@ -145,9 +157,6 @@
   .partcard dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0 0 8px;font-size:12px}
   .partcard dt{opacity:.6}
   .partcard dd{margin:0;font-family:'IBM Plex Mono',monospace}
-  .partcard .pc-n{font-size:12px;opacity:.75}
-  .partcard .pc-s{font-size:11.5px;opacity:.8}
-  .partcard .pc-s a{color:inherit}
   /* a unit's card (js/teardown.js): one row per part on it; a row opens that part's card */
   .partcard .pc-list{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:2px}
   .partcard .pc-list button{display:block;width:100%;text-align:left;font:inherit;color:inherit;background:transparent;border:0;border-radius:8px;padding:6px 8px;cursor:pointer;min-height:36px}
@@ -156,30 +165,22 @@
   .partcard .pc-list small{display:block;font-size:12px;opacity:.72}
   .partcard .pc-pos{display:inline-block;font:500 10.5px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;opacity:.65;margin-right:6px}
   .partcard .pc-back{border:0;background:transparent;color:inherit;font:500 12px 'IBM Plex Sans',sans-serif;opacity:.7;cursor:pointer;padding:4px 0;margin:0 0 4px;min-height:32px}
-  .chip{display:inline-block;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.05em;padding:4px 7px;border-radius:999px;vertical-align:1px;white-space:nowrap}
-  .chip.fact{background:#d8eee0;color:#1d6a3c} .chip.inference{background:#e2e6fa;color:#36429c}
-  .chip.check{background:#f9e6cf;color:#8f4f16} .chip.opinion{background:#f1dfee;color:#82306c}
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) main .chip.fact{background:#1f3a2a;color:#8fd6aa} :root:not([data-theme="light"]) main .chip.inference{background:#272d52;color:#a9b3f2}
-    :root:not([data-theme="light"]) main .chip.check{background:#45301a;color:#f0bd85} :root:not([data-theme="light"]) main .chip.opinion{background:#41213b;color:#e6a5d7} }
-  :root[data-theme="dark"] main .chip.fact{background:#1f3a2a;color:#8fd6aa} :root[data-theme="dark"] main .chip.inference{background:#272d52;color:#a9b3f2}
-  :root[data-theme="dark"] main .chip.check{background:#45301a;color:#f0bd85} :root[data-theme="dark"] main .chip.opinion{background:#41213b;color:#e6a5d7}
   #viewer.teardown .hint{display:none}
   .tdhint{position:absolute;left:28px;bottom:84px;font:400 11px 'IBM Plex Mono',monospace;opacity:0;pointer-events:none;transition:opacity .3s}
   #viewer.teardown .tdhint{opacity:.55}
-  .spec td .chip{margin-left:6px}
-  table.spec td{white-space:normal;text-align:left;font-family:'IBM Plex Sans',sans-serif;font-size:14px}
-  table.spec td a{color:var(--muted)}
-  table.spec th{width:28%}
-  table.parts td{white-space:normal;text-align:left;font-family:'IBM Plex Sans',sans-serif;font-size:13.5px}
-  table.parts td.mono{font-family:'IBM Plex Mono',monospace;font-size:12.5px;white-space:nowrap}
+  /* the full parts list (written from parts.js by the script at the end) */
+  table.parts{table-layout:fixed}
+  table.parts thead th:nth-child(1){width:24%}
+  table.parts thead th:nth-child(3){width:170px}
+  table.parts td{white-space:normal;text-align:left;font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;padding-right:28px}
+  table.parts td.mono{font-family:'IBM Plex Mono',monospace;font-size:12.5px;white-space:nowrap;padding-right:0}
   table.parts td small{color:var(--muted)}
   table.parts tr.grp th{padding-top:22px;color:var(--ink);font-weight:600}
   table.parts thead th{font-size:12px;text-transform:uppercase;letter-spacing:.06em}
   .modes{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 22px}
-  .modes button{font:500 13px 'IBM Plex Sans',sans-serif;border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:999px;padding:8px 14px;cursor:pointer}
-  .modes button:hover{border-color:var(--accent)}
-  .key{font-size:13px;color:var(--muted);margin:0 0 18px}
-  .key .chip{margin-right:4px}
+  .modes button,.cta{font:500 13px 'IBM Plex Sans',sans-serif;border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:999px;padding:8px 14px;min-height:36px;cursor:pointer}
+  .modes button:hover,.cta:hover{border-color:var(--accent)}
+  .cta{margin-top:8px}
   .scrollx{overflow-x:auto}
   #nogl[hidden]{display:none}
   #nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
@@ -190,11 +191,35 @@
 
   /* ---------- page sections ---------- */
   main{max-width:1080px;margin:0 auto;padding:72px 24px 48px}
-  section{margin-bottom:84px}
+  section{margin-bottom:96px}
   .eyebrow{font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
-  h2{font-size:30px;font-weight:600;letter-spacing:-.01em;margin:0 0 10px;line-height:1.2}
+  h2{font-size:38px;font-weight:600;letter-spacing:-.015em;margin:0 0 16px;line-height:1.15}
   h3{font-size:18px;font-weight:600;margin:34px 0 10px}
   .lede{color:var(--muted);max-width:62ch;margin:0 0 30px}
+  /* a feature section: the words on the left, its figures on the right (one column on a phone) */
+  .feature{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px 56px;align-items:start}
+  .feature .fhead{grid-column:1/-1}
+  .feature .fhead h2{margin:0}
+  .feature .copy p{margin:0 0 10px;max-width:50ch;font-size:17px}
+  .feature .copy p.lead{font-size:22px;font-weight:500;line-height:1.35;margin-bottom:14px}
+  .feature .copy p.sub{color:var(--muted);font-size:15px}
+  .figs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  /* a feature's picture: a still of the 3D model (img/, made by build/brochure-images.py at twice this slot's size),
+     across the top of its figures. The img's width and height give the box its shape before the file arrives */
+  .shot{grid-column:1/-1;margin:0;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#e9e6e1}
+  .shot img{display:block;width:100%;height:auto}
+  .shot figcaption{font:500 11px 'IBM Plex Mono',monospace;color:var(--muted);padding:7px 12px;border-top:1px solid var(--line)}
+  .intro .copy p{font-size:19px}
+  .intro .tiles{margin-top:30px}
+  /* the full parts list: closed until asked for */
+  details.partslist{margin-top:26px;border-top:1px solid var(--line)}
+  details.partslist summary{cursor:pointer;padding:16px 0;font-weight:600;font-size:16px}
+  details.partslist summary span{font-weight:400;color:var(--muted);font-size:14px;margin-left:8px}
+  /* tech specs: one plain two-column table */
+  table.specs th{width:30%;color:var(--muted)}
+  table.specs td{white-space:normal;text-align:left;font-family:'IBM Plex Sans',sans-serif;font-size:15px}
+  table.specs tr.grp th{padding-top:26px;color:var(--ink);font-weight:600;font-size:15px;border-bottom:1px solid var(--ink)}
+  table.specs tr.grp th small{font-weight:400;color:var(--muted);margin-left:8px;font-size:13px}
   .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
   .tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px}
   .tile .v{font:500 30px/1.1 'IBM Plex Mono',monospace;letter-spacing:-.02em}
@@ -217,16 +242,11 @@
   svg.big .lab{font-size:4.6px}
   svg.big .dt{font-size:5.4px}
 
-  .tables{display:grid;grid-template-columns:1fr 1fr;gap:16px 28px}
   table{width:100%;border-collapse:collapse;font-size:14px}
-  caption{text-align:left;font-weight:600;font-size:15px;padding:0 0 8px}
   th,td{text-align:left;padding:8px 0;border-bottom:1px solid var(--line);vertical-align:top}
   th{font-weight:400;color:var(--muted);padding-right:14px}
   td{font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:right;white-space:nowrap}
-  td.wrap{white-space:normal}
   .note{font-size:13px;color:var(--muted);margin:10px 0 0}
-  ul.plain{margin:0;padding-left:18px;font-size:14px}
-  ul.plain li{margin:4px 0}
 
   .finishes{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
   .finish{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;text-align:left;color:inherit;font:inherit}
@@ -234,16 +254,15 @@
   .finish .chips{display:flex;margin-bottom:12px}
   .finish .chips span{width:30px;height:30px;border-radius:50%;margin-right:-8px;box-shadow:0 0 0 2px var(--surface)}
   .finish b{display:block;font-weight:600}
-  .finish .hex{font:400 11px 'IBM Plex Mono',monospace;color:var(--muted);margin-top:4px;line-height:1.6}
 
   .disclaimer{border-top:1px solid var(--line);padding-top:24px;font-size:13px;color:var(--muted)}
-  .disclaimer p{max-width:72ch;margin:0 0 8px}
+  .disclaimer p{max-width:72ch;margin:0 0 6px}
 
   @media (max-width:820px){
-    .drawings,.tables{grid-template-columns:1fr}
+    .drawings,.feature{grid-template-columns:1fr}
     .side{right:12px;top:auto;bottom:150px;transform:none}
   }
-  .drawings>*,.tables>*,.tiles>*{min-width:0}
+  .drawings>*,.feature>*,.tiles>*,.figs>*{min-width:0}
   @media (max-width:560px){
     .hud-tl{left:16px;top:16px;right:16px}
     .hud-tr{left:16px;right:auto;top:128px;bottom:auto;align-items:flex-start}
@@ -253,19 +272,39 @@
     .side{top:118px;bottom:auto;right:10px}
     .swatches{gap:6px;padding:8px 6px}
     .sw{width:19px;height:19px}
-    /* labels on a phone (F12): 12 px, at least 32 px tall to tap, the short names (two lines at most) */
+    /* labels on a phone: 12 px, at least 32 px tall to tap, the short names (two lines at most) */
     .plabel{font-size:12px;padding:6px 10px;min-height:32px}
     #labels.cols .plabel{white-space:normal;max-width:118px;text-align:left;border-radius:10px;line-height:1.15}
     /* the card is a band across the bottom, over the button bar (the x or a tap on empty space closes it), so the
-       exploded stack keeps the screen above it (F7) */
+       exploded stack keeps the screen above it */
     .partcard{left:12px;right:12px;width:auto;bottom:10px;max-height:44%}
     details.tweaks{left:16px;top:86px}
     /* five teardown steps fit in one row at 390 px */
     .pill button{padding:8px 8px}
     .pill input[type=range]{width:110px}
     main{padding:56px 16px 40px}
-    h2{font-size:25px}
+    section{margin-bottom:72px}
+    h2{font-size:28px}
     .tile .v{font-size:25px}
+    /* two tiles a row; an odd last tile takes the whole row */
+    .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .tiles>.tile:last-child:nth-child(odd){grid-column:1/-1}
+    .feature .copy p{font-size:16px}
+    .feature .copy p.lead{font-size:19px}
+    .intro .copy p{font-size:17px}
+    .hud-tr .k-wht{display:none}
+    table.specs th{width:36%}
+    table.specs td{font-size:14px}
+    /* the parts list on a phone: each part's name and size on one line, what it does below (three columns left the
+       words a strip a few words wide) */
+    table.parts,table.parts tbody,table.parts tr.grp,table.parts tr.grp th{display:block;width:auto}
+    table.parts thead{display:none}
+    table.parts tr:not(.grp){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+    table.parts tr:not(.grp)>*{border:0;padding:0;width:auto}
+    table.parts tr:not(.grp) th{grid-area:1/1;color:var(--ink);font-weight:500}
+    table.parts tr:not(.grp) td.mono{grid-area:1/2;color:var(--muted)}
+    table.parts tr:not(.grp) td.mono::after{content:" mm"}
+    table.parts tr:not(.grp) td:not(.mono){grid-area:2/1/3/3;margin-top:4px}
   }
 </style>
 </head>
@@ -274,19 +313,19 @@
 <!-- ============ interactive render ============ -->
 <div id="viewer">
   <div id="mount" aria-label="3D render of the Fold Communicator. Drag to rotate, pinch to zoom, double-tap to reset."></div>
-  <div id="nogl" hidden>This browser could not start 3D graphics (WebGL). The dimension sheet below still works.</div>
-  <button id="gllost" type="button" hidden>3D stopped — tap to restart</button>
-  <div id="noload" hidden style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;padding:24px">Could not load the 3D libraries (this needs a recent browser and a connection to cdn.jsdelivr.net). The dimension sheet below still works.</div>
+  <div id="nogl" hidden>This browser could not start 3D graphics (WebGL). The rest of the page below still works.</div>
+  <button id="gllost" type="button" hidden>3D stopped. Tap to restart.</button>
+  <div id="noload" hidden style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;padding:24px">Could not load the 3D libraries (this needs a recent browser and a connection to cdn.jsdelivr.net). The rest of the page below still works.</div>
 
   <header class="hud hud-tl">
     <h1>Fold Communicator</h1>
-    <p>Concept · Clicks Communicator-style front × Galaxy Z Fold-style hinge · 2026 flagship internals</p>
+    <p>A concept for a folding phone with a real keyboard.</p>
   </header>
 
   <div class="hud hud-tr" aria-live="polite">
     <div id="state">Folded</div>
     <div id="dims">78.4 × 123.9 × 12.5 mm</div>
-    <div class="k">width × height × thickness</div>
+    <div class="k">Size<span class="k-wht"> · width × height × thickness</span></div>
   </div>
 
   <details class="tweaks">
@@ -296,7 +335,7 @@
       <label><input type="checkbox" id="t-rotate"> Auto-rotate</label>
       <label><input type="checkbox" id="t-backdrop"> Dark backdrop</label>
       <label><input type="checkbox" id="t-single"> Single-pane inner screen</label>
-      <label><input type="checkbox" id="t-duo"> iPhone Duo-style opening</label>
+      <label><input type="checkbox" id="t-duo"> Screen hand-over animation</label>
       <label><input type="checkbox" id="t-labels" checked> Part labels</label>
       <label><input type="checkbox" id="t-detail"> High detail (exploded view)</label>
       <label>Quality <select id="t-quality" aria-label="Rendering quality"><option value="auto">Auto</option><option value="low">Low</option><option value="mid">Mid</option><option value="high">High</option></select></label>
@@ -324,7 +363,7 @@
   </div>
 
   <div class="hint">Drag to turn · pinch or Ctrl + scroll to zoom · double-click to reset</div>
-  <div class="tdhint">Click a part or its label to read about it</div>
+  <div class="tdhint">Tap any part to see what it does</div>
   <!-- the Mechanical view's caption: what the hinge is doing at this angle (js/teardown.js places it) -->
   <div id="mcap" aria-live="polite" hidden></div>
 
@@ -354,72 +393,229 @@
       </label>
     </div>
   </div>
-  <a class="scroll-cue" href="#flagship">Specs ↓</a>
+  <a class="scroll-cue" href="#intro">Discover ↓</a>
 </div>
 
 <main>
-  <!-- ============ flagship spec ============ -->
-  <section id="flagship">
-    <p class="eyebrow">Spec</p>
-    <h2>Built from 2026 flagship parts</h2>
-    <p class="lede">Every part is a real, current flagship component, or sized from one. The outside stays the same as before. What changed is what's inside, and each figure says how sure we are of it.</p>
-    <p class="key"><span class="chip fact">FACT</span> published by the maker or a teardown · <span class="chip inference">INFERENCE</span> worked out from published figures · <span class="chip opinion">OPINION</span> a design choice · <span class="chip check">CHECK</span> not yet confirmed</p>
-
-    <div class="tiles">
-      <div class="tile"><div class="v">SM8975</div><div class="l">Snapdragon 8 Elite Extreme Gen 6, 2 nm</div></div>
-      <div class="tile"><div class="v"><span data-fc="mAh">6,830</span><small>mAh</small></div><div class="l">Two silicon-carbon cells, ≈<span data-fc="wh">26.6</span> Wh</div></div>
-      <div class="tile"><div class="v">7.5<small>in</small></div><div class="l">Inner foldable LTPO OLED</div></div>
-      <div class="tile"><div class="v">4.2<small>in</small></div><div class="l">Cover LTPO OLED over the keyboard</div></div>
-      <div class="tile"><div class="v">200<small>MP</small></div><div class="l">Main camera, 1/1.4-type sensor</div></div>
+  <!-- ============ 1. intro ============ -->
+  <section id="intro" class="intro">
+    <p class="eyebrow">A design concept</p>
+    <h2>Two devices. One pocket.</h2>
+    <div class="copy">
+      <p>Fold Communicator is a design concept for a possible phone.</p>
+      <p>Shut, it is a compact phone with a real keyboard.</p>
+      <p>Open, it is a big screen for reading, writing and working.</p>
     </div>
-
-    <div class="scrollx" style="margin-top:22px">
-    <table class="spec">
-      <tr><th>Chip</th><td>Snapdragon 8 Elite Extreme Gen 6 (SM8975), 2 nm. Two cores up to 5.0 GHz and six up to 4.0 GHz. Built-in X105 5G modem (up to 14.8 Gbps down) and FastConnect 8800 (Wi-Fi 8-ready, Bluetooth 6.3). <span class="chip fact">FACT</span> <a href="https://www.qualcomm.com/content/dam/qcomm-martech/dm-assets/documents/Snapdragon-8-Elite-Extreme-Gen-6-Product-Brief.pdf" target="_blank" rel="noopener">Qualcomm brief</a></td></tr>
-      <tr><th>Memory and storage</th><td>Two tiers: 12 GB + 256 GB, or 16 GB + 512 GB (LPDDR6 memory, UFS 5.0 storage). The chip supports up to 24 GB. <span class="chip opinion">OPINION</span> on the amounts, <span class="chip fact">FACT</span> on support: <a href="https://www.qualcomm.com/content/dam/qcomm-martech/dm-assets/documents/Snapdragon-8-Elite-Extreme-Gen-6-Product-Brief.pdf" target="_blank" rel="noopener">Qualcomm brief</a></td></tr>
-      <tr><th>SIM</th><td>eSIM only (a SIM built into the phone and set up in software). No SIM tray, so the frame has no tray slot to cut and seal. <span class="chip opinion">OPINION</span></td></tr>
-      <tr><th>Battery</th><td>≈<span data-fc="mAh">6,830</span> mAh in two silicon-carbon cells (<span data-fc="cellA">2,917</span> + <span data-fc="cellB">3,913</span>). That is the cells' volume at Honor's published 900 Wh/L. <span class="chip inference">INFERENCE</span> <a href="https://propakistani.pk/2026/03/02/honors-new-blade-battery-tech-has-over-900wh-l-density/amp/" target="_blank" rel="noopener">Honor Blade battery</a>. For scale, the vivo X Fold 6 ships 7,000 mAh <span class="chip fact">FACT</span> <a href="https://www.91mobiles.com/hub/vivo-x-fold-6-launched-7000mah-battery-200mp-camera-price-specifications/" target="_blank" rel="noopener">91mobiles</a></td></tr>
-      <tr><th>Charging</th><td>80 W wired, 50 W wireless. <span class="chip opinion">OPINION</span> in line with the Honor Magic V6 (80 W / 66 W) and vivo X Fold 6 (80 W / 40 W). <a href="https://www.androidauthority.com/honor-magic-v6-slimmest-foldable-launched-3645182/" target="_blank" rel="noopener">Android Authority</a> · <a href="https://www.91mobiles.com/hub/vivo-x-fold-6-launched-7000mah-battery-200mp-camera-price-specifications/" target="_blank" rel="noopener">91mobiles</a></td></tr>
-      <tr><th>Inner screen</th><td>7.5-inch LTPO OLED, 2364 × 1902 at about 403 ppi, 1–120 Hz, under ultra-thin glass. Size from our 149 × 119.9 mm screen area; sharpness matched to the Honor Magic V6. <span class="chip inference">INFERENCE</span> <a href="https://www.phonearena.com/phones/Honor-Magic-V6_id12958" target="_blank" rel="noopener">PhoneArena</a></td></tr>
-      <tr><th>Cover screen</th><td>4.2-inch LTPO OLED, 1106 × 1269 at about 403 ppi, 1–120 Hz. Similar to the Clicks Communicator's 4.03-inch screen. <span class="chip inference">INFERENCE</span> <a href="https://en.wikipedia.org/wiki/Clicks_Communicator" target="_blank" rel="noopener">Wikipedia</a></td></tr>
-      <tr><th>Brightness</th><td>Up to 5,000 nits peak (HDR) inside, the Magic V6's figure. <span class="chip check">CHECK</span> for a panel this size. <a href="https://www.phonearena.com/phones/Honor-Magic-V6_id12958" target="_blank" rel="noopener">PhoneArena</a></td></tr>
-      <tr><th>Rear cameras</th><td>200 MP main (1/1.4-type, f/1.7, stabilised). 50 MP 3× periscope zoom (Sony LYT-602). 50 MP ultra-wide. The same set as the vivo X Fold 6. <span class="chip fact">FACT</span> <a href="https://www.91mobiles.com/hub/vivo-x-fold-6-launched-7000mah-battery-200mp-camera-price-specifications/" target="_blank" rel="noopener">91mobiles</a></td></tr>
-      <tr><th>Selfie cameras</th><td>20 MP in the cover screen <span class="chip fact">FACT</span>, and a punch-hole camera in the top-right corner of the inner screen, where the Xiaomi 18 Fold puts it <span class="chip inference">INFERENCE</span> <a href="https://www.androidauthority.com/xiaomi-18-fold-images-leaked-3702650/" target="_blank" rel="noopener">Android Authority</a> · <a href="https://www.notebookcheck.net/Xiaomi-18-Fold-review-Big-display-big-performance-big-compromises.1428903.0.html" target="_blank" rel="noopener">Notebookcheck</a></td></tr>
-      <tr><th>Video</th><td>8K at 60 fps, 4K slow motion at 240 fps. <span class="chip fact">FACT</span> <a href="https://www.qualcomm.com/content/dam/qcomm-martech/dm-assets/documents/Snapdragon-8-Elite-Extreme-Gen-6-Product-Brief.pdf" target="_blank" rel="noopener">Qualcomm brief</a></td></tr>
-      <tr><th>Size</th><td>123.9 × 78.4 × 12.5 mm folded (15.5 at the camera); 153.0 × 123.9 × 7.0 mm open.</td></tr>
-    </table>
+    <div class="tiles">
+      <div class="tile"><div class="v">7.5<small>in</small></div><div class="l">Inner screen</div></div>
+      <div class="tile"><div class="v">4.2<small>in</small></div><div class="l">Cover screen</div></div>
+      <div class="tile"><div class="v">37</div><div class="l">Backlit keys</div></div>
+      <div class="tile"><div class="v"><span data-fc="mAh">6,830</span><small>mAh</small></div><div class="l">Battery, two cells (approx.)</div></div>
+      <div class="tile"><div class="v">200<small>MP</small></div><div class="l">Main camera</div></div>
     </div>
   </section>
 
-  <!-- ============ inside ============ -->
+  <!-- ============ 2. keyboard ============ -->
+  <section id="keyboard" class="feature">
+    <div class="fhead">
+      <p class="eyebrow">Keyboard</p>
+      <h2>Type like you mean it.</h2>
+    </div>
+    <div class="copy">
+      <p class="lead">37 backlit keys with a real click.</p>
+      <p>Each key moves 0.3 mm and clicks on a metal dome, so you feel every press.</p>
+      <p>The keys sit just below the face of the phone, so a pocket or a table top does not press them.</p>
+      <p>The keys are touch-sensitive too. Swipe across them to scroll.</p>
+      <p>Above them, a 4.2-inch screen shows replies at a glance.</p>
+      <button class="cta" data-view="front">Show the keyboard</button>
+    </div>
+    <div class="figs">
+      <figure class="shot"><img src="img/keyboard.webp" width="908" height="680" loading="lazy" decoding="async"
+        alt="Close-up of the keyboard: four rows of dark keys below the cover screen."><figcaption>Concept render</figcaption></figure>
+      <div class="tile"><div class="v">4</div><div class="l">Rows of keys</div></div>
+      <div class="tile"><div class="v">0.3<small>mm</small></div><div class="l">Key travel, on metal domes</div></div>
+      <div class="tile"><div class="v">Backlit</div><div class="l">Every key, for typing in the dark</div></div>
+      <div class="tile"><div class="v">Swipe</div><div class="l">Across the keys to scroll</div></div>
+    </div>
+  </section>
+
+  <!-- ============ 3. inner screen ============ -->
+  <section id="screen" class="feature">
+    <div class="fhead">
+      <p class="eyebrow">Inner screen</p>
+      <h2>Open it up.</h2>
+    </div>
+    <div class="copy">
+      <p class="lead">Unfold it, and the two halves become one 7.5-inch screen.</p>
+      <p>Two apps fit side by side: messages on one half, a document on the other.</p>
+      <p>It is sharp: 2364 × 1902 pixels, about 403 to the inch.</p>
+      <p>It is smooth: up to 120 frames a second when you scroll, down to one a second on a still page to save power.</p>
+      <p>Up to 3,000 nits keeps it readable in sunlight. Ultra-thin glass covers it.</p>
+      <button class="cta" data-view="open">Open it</button>
+    </div>
+    <div class="figs">
+      <figure class="shot"><img src="img/open.webp" width="908" height="680" loading="lazy" decoding="async"
+        alt="The phone open flat: one screen across both halves, with the message list on one half and a chat on the other."><figcaption>Concept render</figcaption></figure>
+      <div class="tile"><div class="v">2<small>apps</small></div><div class="l">Side by side, one on each half</div></div>
+      <div class="tile"><div class="v">403<small>ppi</small></div><div class="l">Sharpness</div></div>
+      <div class="tile"><div class="v">1–120<small>Hz</small></div><div class="l">Refresh rate</div></div>
+      <div class="tile"><div class="v">3,000<small>nits</small></div><div class="l">Brightness</div></div>
+    </div>
+  </section>
+
+  <!-- ============ 4. hinge ============ -->
+  <section id="fold" class="feature">
+    <div class="fhead">
+      <p class="eyebrow">Hinge</p>
+      <h2>Folds flat. Shuts without a gap.</h2>
+    </div>
+    <div class="copy">
+      <p class="lead">Each half turns on its own pivot, so the phone shuts flat with no gap between the halves.</p>
+      <p>Inside the hinge, the screen curls into a soft loop instead of a hard crease.</p>
+      <p>It holds any angle you leave it at, from shut to open flat.</p>
+      <button class="cta" data-mode="mechanical">See the hinge work</button>
+    </div>
+    <div class="figs">
+      <figure class="shot"><img src="img/hinge.webp" width="908" height="680" loading="lazy" decoding="async"
+        alt="The phone half open and standing on its own: the camera island on one half, the keyboard on the other."><figcaption>Concept render</figcaption></figure>
+      <div class="tile"><div class="v">2</div><div class="l">Pivots, one for each half</div></div>
+      <div class="tile"><div class="v">0–180°</div><div class="l">From shut to open flat</div></div>
+      <div class="tile"><div class="v">Any<small>angle</small></div><div class="l">Holds where you leave it</div></div>
+      <div class="tile"><div class="v">1.9<small>mm</small></div><div class="l">How far the spine stands out when shut</div></div>
+    </div>
+  </section>
+
+  <!-- ============ 5. cameras ============ -->
+  <section id="cameras" class="feature">
+    <div class="fhead">
+      <p class="eyebrow">Cameras</p>
+      <h2>Three cameras. One for every shot.</h2>
+    </div>
+    <div class="copy">
+      <p class="lead">A 200 MP main camera, built for low light.</p>
+      <p>Its large 1/1.4-type sensor gathers more light, and optical stabilisation steadies the shot.</p>
+      <p>A 50 MP 3× zoom for portraits and far-off detail.</p>
+      <p>A 50 MP ultra-wide for rooms, groups and views.</p>
+      <p>8K video at 60 frames a second.</p>
+      <p>A 20 MP selfie camera on each screen, for calls with the phone shut or open.</p>
+      <p class="sub">The big main sensor needs depth. The phone is 15.5 mm thick at the camera.</p>
+      <button class="cta" data-view="back">See the back</button>
+    </div>
+    <div class="figs">
+      <figure class="shot"><img src="img/cameras.webp" width="908" height="680" loading="lazy" decoding="async"
+        alt="The camera island on the back: three lenses in a column, with the flash beside them."><figcaption>Concept render</figcaption></figure>
+      <div class="tile"><div class="v">50<small>MP</small></div><div class="l">3× zoom</div></div>
+      <div class="tile"><div class="v">50<small>MP</small></div><div class="l">Ultra-wide</div></div>
+      <div class="tile"><div class="v">20<small>MP</small></div><div class="l">Selfie camera, on each screen</div></div>
+      <div class="tile"><div class="v">8K</div><div class="l">Video at 60 frames a second</div></div>
+    </div>
+  </section>
+
+  <!-- ============ 6. battery and chip ============ -->
+  <section id="power" class="feature">
+    <div class="fhead">
+      <p class="eyebrow">Battery and chip</p>
+      <h2>All day, and then some.</h2>
+    </div>
+    <div class="copy">
+      <p class="lead">About <span data-fc="mAh">6,830</span> mAh in two cells, one in each half, so the weight balances in your hand.</p>
+      <p>Silicon-carbon cells hold more charge in the same space.</p>
+      <p>80 W wired charging. 50 W wireless.</p>
+      <p>It is designed around the Snapdragon 8 Elite Extreme Gen 6, built on a 2 nm process.</p>
+      <p>It is designed for 12 GB of memory with 256 GB of storage, or 16 GB with 512 GB.</p>
+    </div>
+    <div class="figs">
+      <figure class="shot"><img src="img/port.webp" width="908" height="680" loading="lazy" decoding="async"
+        alt="The bottom edge, shut: the USB-C port in the keyboard half, with microphone holes and a speaker grille."><figcaption>Concept render</figcaption></figure>
+      <div class="tile"><div class="v">2<small>cells</small></div><div class="l">One in each half, for balance</div></div>
+      <div class="tile"><div class="v">80<small>W</small></div><div class="l">Wired charging</div></div>
+      <div class="tile"><div class="v">50<small>W</small></div><div class="l">Wireless charging</div></div>
+      <div class="tile"><div class="v">2<small>nm</small></div><div class="l">Chip process</div></div>
+    </div>
+  </section>
+
+  <!-- ============ 7. inside ============ -->
   <section id="inside">
     <p class="eyebrow">Teardown</p>
-    <h2>What's inside, and where</h2>
-    <p class="lede">Take the model apart like a teardown video. <b>Back off</b> lifts the rear covers off. <b>Screens off</b> lifts both screens and the mid-frames. <b>Exploded</b> lays the phone out in its main groups, with the back cover on top. Tick <b>High detail</b> under Options to see every small piece instead. <b>Mechanical</b> shows only the frames and the hinge. Move the <b>Hinge</b> slider there to watch the hinge work. Click any part or label to read what it is. Turn on <b>iPhone Duo-style opening</b> under Options, then press <b>Open ▸</b>, to see the screens hand over as the hinge moves.</p>
+    <h2>Take it apart.</h2>
+    <p class="lede">Every part is modelled. Lift the back off, pull the screens, or explode the whole phone. Tap any part to see what it does.</p>
     <div class="modes">
-      <button data-mode="back">Show it with the back off</button>
-      <button data-mode="screens">Show it with the screens off</button>
-      <button data-mode="explode">Show the exploded view</button>
-      <button data-mode="mechanical">Show how the hinge works</button>
+      <button data-mode="back">Lift the back off</button>
+      <button data-mode="screens">Take the screens off</button>
+      <button data-mode="explode">Explode it</button>
+      <button data-mode="mechanical">Watch the hinge</button>
     </div>
-    <div class="scrollx">
-      <table class="parts" id="parts-table">
-        <thead><tr><th>Part</th><th>What it is</th><th>Size (mm)</th><th>Basis</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <p class="note">Sizes are width × height × depth, as placed in the model. A basis of <span class="chip check">CHECK</span> means the size is a typical value, not a measured one.</p>
+    <p class="note">Under Options, <b>High detail</b> shows every small piece in the exploded view. <b>Screen hand-over animation</b> passes the picture between the screens as the phone opens.</p>
+    <details class="partslist">
+      <summary>Full parts list<span>every part, what it does, and its size</span></summary>
+      <div class="scrollx">
+        <table class="parts" id="parts-table">
+          <thead><tr><th>Part</th><th>What it does</th><th>Size (mm)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="note">Sizes are width × height × depth in millimetres, as placed in the model.</p>
+    </details>
   </section>
 
-  <!-- ============ dimensions ============ -->
-  <section id="dimensions">
-    <p class="eyebrow">Dimensions</p>
-    <h2>Pocket-sized shut, tablet-wide open</h2>
-    <p class="lede">All measurements are in millimetres, taken from the 3D model. When folded, it is a narrow phone with a cover screen and a full keyboard. Opened like a book, the two halves make one 153 mm wide screen.</p>
+  <!-- ============ 8. finishes ============ -->
+  <section id="finishes">
+    <p class="eyebrow">Finishes</p>
+    <h2>Five finishes.</h2>
+    <p class="lede">Porcelain, Graphite, Sage, Clay and Cobalt. Tap one to see it on the phone above.</p>
+    <div class="finishes">
+      <button class="finish" data-goto="porcelain"><div class="chips"><span style="background:#d9d8d5"></span><span style="background:#efece6"></span><span style="background:#34373c"></span></div><b>Porcelain</b></button>
+      <button class="finish" data-goto="graphite"><div class="chips"><span style="background:#5a5c60"></span><span style="background:#2c2d30"></span><span style="background:#1b1c1f"></span></div><b>Graphite</b></button>
+      <button class="finish" data-goto="sage"><div class="chips"><span style="background:#b3b8ad"></span><span style="background:#c2cabb"></span><span style="background:#2f352f"></span></div><b>Sage</b></button>
+      <button class="finish" data-goto="clay"><div class="chips"><span style="background:#c8b09d"></span><span style="background:#dbc6b4"></span><span style="background:#3b2f2a"></span></div><b>Clay</b></button>
+      <button class="finish" data-goto="cobalt"><div class="chips"><span style="background:#8290a2"></span><span style="background:#34465f"></span><span style="background:#18202c"></span></div><b>Cobalt</b></button>
+    </div>
+  </section>
 
+  <!-- ============ 9. tech specs ============ -->
+  <section id="specs">
+    <p class="eyebrow">In detail</p>
+    <h2>Tech specs</h2>
+    <table class="specs">
+      <tr class="grp"><th colspan="2">Size</th></tr>
+      <tr><th>Folded</th><td>78.4 × 123.9 × 12.5 mm (15.5 mm at the camera)</td></tr>
+      <tr><th>Open</th><td>153.0 × 123.9 × 7.0 mm</td></tr>
+      <tr class="grp"><th colspan="2">Screens</th></tr>
+      <tr><th>Inner screen</th><td>7.5-inch LTPO OLED. 2364 × 1902, about 403 ppi. 1–120 Hz. Up to 3,000 nits. Ultra-thin glass.</td></tr>
+      <tr><th>Cover screen</th><td>4.2-inch LTPO OLED. 1106 × 1269, about 403 ppi. 1–120 Hz.</td></tr>
+      <tr class="grp"><th colspan="2">Keyboard</th></tr>
+      <tr><th>Keys</th><td>37 backlit keys. Touch-sensitive: swipe across them to scroll.</td></tr>
+      <tr><th>Feel</th><td>0.3 mm travel on metal domes. The keys sit just below the face of the phone.</td></tr>
+      <tr class="grp"><th colspan="2">Chip and memory</th></tr>
+      <tr><th>Chip</th><td>Snapdragon 8 Elite Extreme Gen 6. 2 nm. Eight cores, up to 5.0 GHz.</td></tr>
+      <tr><th>Memory and storage</th><td>12 GB + 256 GB, or 16 GB + 512 GB. LPDDR6 memory, UFS 5.0 storage.</td></tr>
+      <tr class="grp"><th colspan="2">Cameras</th></tr>
+      <tr><th>Main</th><td>200 MP, 1/1.4-type sensor, f/1.7, optical stabilisation</td></tr>
+      <tr><th>Zoom</th><td>50 MP, 3× optical (periscope)</td></tr>
+      <tr><th>Ultra-wide</th><td>50 MP</td></tr>
+      <tr><th>Selfie</th><td>20 MP on the cover screen. 20 MP in a punch-hole on the inner screen.</td></tr>
+      <tr><th>Video</th><td>8K at 60 fps. 4K slow motion at 240 fps.</td></tr>
+      <tr class="grp"><th colspan="2">Battery and charging</th></tr>
+      <tr><th>Battery</th><td>About <span data-fc="mAh">6,830</span> mAh (about <span data-fc="wh">26.6</span> Wh) in two silicon-carbon cells: <span data-fc="cellA">2,917</span> + <span data-fc="cellB">3,913</span> mAh</td></tr>
+      <tr><th>Charging</th><td>80 W wired. 50 W wireless. Reverse wireless charging.</td></tr>
+      <tr class="grp"><th colspan="2">Connectivity</th></tr>
+      <tr><th>Wireless and ports</th><td>5G, Wi-Fi 7 (Wi-Fi 8-ready), Bluetooth 6.3, UWB, NFC, USB-C 3.1 Gen 2 (10 Gbps)</td></tr>
+      <tr><th>SIM</th><td>eSIM. No SIM tray.</td></tr>
+      <tr class="grp"><th colspan="2">Sound and security</th></tr>
+      <tr><th>Speakers and mics</th><td>Two speakers at opposite corners, for stereo in any position. Five microphones.</td></tr>
+      <tr><th>Unlock</th><td>Fingerprint sensor in the power key</td></tr>
+      <tr class="grp"><th colspan="2">Build</th></tr>
+      <tr><th>Frame</th><td>Aluminium, with steel hinge parts</td></tr>
+      <tr><th>Glass</th><td>Toughened glass on the back and the cover screen. Ultra-thin glass on the inner screen.</td></tr>
+      <tr class="grp"><th colspan="2">Design targets<small>what the design aims for, not test results</small></th></tr>
+      <tr><th>Weight</th><td>About 250 g</td></tr>
+      <tr><th>Water and dust</th><td>IP48 water and dust resistance. It keeps out objects bigger than 1 mm and can take a dip in fresh water.</td></tr>
+    </table>
+
+    <h3>Dimensions</h3>
     <div class="tiles">
       <div class="tile"><div class="v">123.9<small>mm</small></div><div class="l">Height</div></div>
-      <div class="tile"><div class="v">78.4<small>mm</small></div><div class="l">Width, folded (half + hinge)</div></div>
+      <div class="tile"><div class="v">78.4<small>mm</small></div><div class="l">Width, folded</div></div>
       <div class="tile"><div class="v">12.5<small>mm</small></div><div class="l">Thickness, folded (15.5 at the camera)</div></div>
       <div class="tile"><div class="v">153.0<small>mm</small></div><div class="l">Width, open flat</div></div>
       <div class="tile"><div class="v">7.0<small>mm</small></div><div class="l">Thickness, open</div></div>
@@ -432,13 +628,14 @@
           <defs>
             <marker id="ar" viewBox="0 0 6 6" refX="5.5" refY="3" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L6,3 L0,6 z" fill="var(--dim)"/></marker>
           </defs>
-          <!-- hinge spine (left) -->
-          <rect class="part" x="0" y="0" width="2.9" height="123.9" rx="0.9"/>
-          <!-- deck leaf: outer corners r 9.2, hinge corners r 1.6 -->
+          <!-- hinge spine (left): its ends stop 1.25 short of the halves' ends, which lap over them (121.4 long) -->
+          <rect class="part" x="0" y="1.25" width="2.9" height="121.4" rx="0.9"/>
+          <!-- keyboard half: outer corners r 9.2, hinge corners r 1.6 -->
           <path class="part" d="M3.5,0 H69.2 Q78.4,0 78.4,9.2 V114.7 Q78.4,123.9 69.2,123.9 H3.5 Q1.9,123.9 1.9,122.3 V1.6 Q1.9,0 3.5,0 Z"/>
           <!-- cover screen 69.7 × 80, 3.6 from top -->
           <rect class="scr" x="5.3" y="3.6" width="69.7" height="80" rx="6.3"/>
-          <circle cx="40.15" cy="7.4" r="1.1" class="key"/>
+          <!-- cover selfie camera: its ring Ø2.9, 7.1 from the top -->
+          <circle cx="40.15" cy="7.1" r="1.45" class="key"/>
           <text class="lab" x="40.15" y="45" text-anchor="middle">cover screen</text>
           <text class="dt" x="40.15" y="50" text-anchor="middle">69.7 × 80.0</text>
           <!-- keyboard pocket and keys -->
@@ -446,10 +643,12 @@
           <g id="svgkeys"></g>
           <!-- earpiece: above the cover screen, centred 50 from the hinge edge, 60 above the middle -->
           <rect class="key" x="46.9" y="1.6" width="10" height=".7" rx=".35"/>
-          <!-- side buttons on the free edge (the screen half's, behind the keyboard half when folded) -->
-          <rect class="part" x="78.4" y="16.95" width=".8" height="18" rx=".4"/>
-          <rect class="part" x="78.4" y="42.45" width=".8" height="11" rx=".4"/>
-          <text class="lab" x="80.5" y="27" >volume</text>
+          <!-- side keys on the free edge (the screen half's, behind the keyboard half when folded), as js/exterior.js:
+               volume 18 long, centred 35 above the middle, standing 0.25 proud; power and fingerprint 12 long, centred
+               14 above, flush (drawn as a dark mark on the edge) -->
+          <rect class="part" x="78.4" y="17.95" width=".25" height="18" rx=".12"/>
+          <rect class="key" x="78.15" y="41.95" width=".5" height="12" rx=".25"/>
+          <text class="lab" x="80.5" y="28" >volume</text>
           <text class="lab" x="80.5" y="49" >power</text>
           <!-- width dimension -->
           <line class="ext" x1="0" y1="-1" x2="0" y2="-11"/><line class="ext" x1="78.4" y1="-1" x2="78.4" y2="-11"/>
@@ -459,12 +658,12 @@
           <line class="ext" x1="-1" y1="0" x2="-11" y2="0"/><line class="ext" x1="-1" y1="123.9" x2="-11" y2="123.9"/>
           <line class="dl" x1="-8" y1="0" x2="-8" y2="123.9" marker-start="url(#ar)" marker-end="url(#ar)"/>
           <text class="dt" x="-10" y="61.95" text-anchor="middle" transform="rotate(-90 -10 61.95)">123.9</text>
-          <!-- hinge / leaf split -->
+          <!-- hinge / half split -->
           <line class="ext" x1="1.9" y1="124.9" x2="1.9" y2="133"/>
           <line class="dl" x1="0" y1="131" x2="1.9" y2="131"/>
           <line class="dl" x1="1.9" y1="131" x2="78.4" y2="131" marker-end="url(#ar)"/>
           <text class="lab" x="0.95" y="137.5" text-anchor="end">hinge 1.9 </text>
-          <text class="lab" x="40.15" y="137.5" text-anchor="middle">leaf 76.5</text>
+          <text class="lab" x="40.15" y="137.5" text-anchor="middle">half 76.5</text>
         </svg>
       </figure>
 
@@ -472,24 +671,31 @@
         <figure class="drawing">
           <figcaption>BOTTOM EDGE · FOLDED</figcaption>
           <svg viewBox="-14 -12 112.5 40" role="img" aria-label="Bottom edge, folded: 12.5 mm thick, 15.5 mm including the rear camera bump.">
-            <!-- panel leaf (back, top in this view), deck leaf (front, bottom) -->
+            <!-- screen half (back, top in this view), keyboard half (front, bottom) -->
             <path class="part" d="M1.9,0 H69.2 Q78.4,0 78.4,2.8 V5.6 H1.9 Z"/>
             <path class="part" d="M1.9,5.6 H78.4 V9.65 Q78.4,12.45 69.2,12.45 H1.9 Z"/>
             <!-- spine: the flat-topped dome of the two-pivot hinge, 1.9 beyond the halves -->
             <path class="part" d="M1.9,0.84 Q0,2.6 0,4.6 V6.6 Q0,8.6 1.9,10.36 Z"/>
-            <!-- camera island + lens ring -->
-            <rect class="part" x="48.4" y="-3.05" width="25" height="3.05" rx=".8"/>
-            <rect class="key" x="35.35" y="11.4" width="8.6" height="1.05" rx=".5" opacity=".5"/>
+            <!-- camera island (its rim rounded 0.6) and lens rings: 3.0 over the back glass -->
+            <rect class="part" x="48.4" y="-3.0" width="25" height="3.0" rx=".6"/>
+            <!-- the edge's openings, as js/exterior.js (x from the hinge edge of a half, + 1.9; each half's flat band is
+                 centred 2.7 into its 5.4 mm frame): the screen half's speaker grille (6 holes Ø0.9 at 1.8 pitch, centred
+                 at 55) and microphone (Ø0.8, at 25); the keyboard half's USB-C (8.6 × 2.7, centred) and microphone (at
+                 29.25). Each half's label sits just outside it (inside, the holes read as dots in the words) -->
+            <circle class="key" cx="52.4" cy="2.9" r=".45"/><circle class="key" cx="54.2" cy="2.9" r=".45"/><circle class="key" cx="56.0" cy="2.9" r=".45"/><circle class="key" cx="57.8" cy="2.9" r=".45"/><circle class="key" cx="59.6" cy="2.9" r=".45"/><circle class="key" cx="61.4" cy="2.9" r=".45"/>
+            <circle class="key" cx="26.9" cy="2.9" r=".4"/>
+            <rect class="key" x="35.85" y="6.95" width="8.6" height="2.7" rx="1.35" opacity=".5"/>
+            <circle class="key" cx="31.15" cy="8.3" r=".4"/>
             <text class="lab" x="40.15" y="16.2" text-anchor="middle">USB-C</text>
-            <text class="lab" x="60.9" y="-4.4" text-anchor="middle">camera +3.05</text>
-            <text class="lab" x="26.5" y="3.8" text-anchor="middle">screen half · 5.6</text>
-            <text class="lab" x="26.5" y="10.2" text-anchor="middle">keyboard half · 6.85</text>
+            <text class="lab" x="60.9" y="-4.4" text-anchor="middle">camera +3.0</text>
+            <text class="lab" x="3.5" y="-1.2">screen half · 5.6</text>
+            <text class="lab" x="3.5" y="16.2">keyboard half · 6.85</text>
             <!-- thickness dims -->
             <line class="ext" x1="0" y1="0" x2="-9" y2="0"/><line class="ext" x1="0" y1="12.45" x2="-9" y2="12.45"/>
             <line class="dl" x1="-6" y1="0" x2="-6" y2="12.45" marker-start="url(#ar)" marker-end="url(#ar)"/>
             <text class="dt" x="-8" y="6.2" text-anchor="middle" transform="rotate(-90 -8 6.2)">12.5</text>
-            <line class="ext" x1="79.5" y1="-3.05" x2="91.5" y2="-3.05"/><line class="ext" x1="79.5" y1="12.45" x2="91.5" y2="12.45"/>
-            <line class="dl" x1="88.5" y1="-3.05" x2="88.5" y2="12.45" marker-start="url(#ar)" marker-end="url(#ar)"/>
+            <line class="ext" x1="79.5" y1="-3.0" x2="91.5" y2="-3.0"/><line class="ext" x1="79.5" y1="12.45" x2="91.5" y2="12.45"/>
+            <line class="dl" x1="88.5" y1="-3.0" x2="88.5" y2="12.45" marker-start="url(#ar)" marker-end="url(#ar)"/>
             <text class="dt" x="93" y="4.7" text-anchor="middle" transform="rotate(-90 93 4.7)">15.5</text>
             <line class="dl" x1="0" y1="20.5" x2="78.4" y2="20.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
             <text class="dt" x="39.2" y="26" text-anchor="middle">78.4</text>
@@ -499,9 +705,10 @@
         <figure class="drawing">
           <figcaption>TOP-DOWN · OPEN FLAT</figcaption>
           <svg class="big" viewBox="-6 -12 165 36" role="img" aria-label="Open flat: 153.0 mm wide and about 7.0 mm thick, with the inner screen spanning both halves.">
-            <rect class="part" x="0" y="0" width="153" height="5.6" rx="1.2"/>
-            <rect class="part" x="0" y="5.6" width="76.5" height="1.37" rx=".6"/>
-            <line class="thin" x1="76.5" y1="0" x2="76.5" y2="5.6"/>
+            <!-- both halves 5.72 deep (5.7), and the keyboard half's face plate 1.25 on it (6.97 in all, 7.0) -->
+            <rect class="part" x="0" y="0" width="153" height="5.72" rx="1.2"/>
+            <rect class="part" x="0" y="5.72" width="76.5" height="1.25" rx=".6"/>
+            <line class="thin" x1="76.5" y1="0" x2="76.5" y2="5.72"/>
             <rect class="scr" x="2" y="-.6" width="149" height=".6"/>
             <text class="lab" x="76.5" y="-3" text-anchor="middle">one inner screen across both halves · fold line in the middle</text>
             <text class="lab" x="38.25" y="12.8" text-anchor="middle">keyboard half 76.5</text>
@@ -509,130 +716,21 @@
             <line class="dl" x1="0" y1="16.5" x2="153" y2="16.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
             <text class="dt" x="76.5" y="23" text-anchor="middle">153.0</text>
           </svg>
-          <p class="note">Open thickness ≈ 7.0 mm on the keyboard half (its raised face plate adds 1.25 mm); 5.7 mm on the screen half.</p>
+          <p class="note">Open, it is about 7.0 mm thick on the keyboard half, whose raised face plate adds 1.25 mm. The screen half is 5.7 mm.</p>
         </figure>
       </div>
     </div>
   </section>
 
-  <!-- ============ full spec ============ -->
-  <section id="spec">
-    <p class="eyebrow">Exterior</p>
-    <h2>Every measured outside part</h2>
-    <p class="lede">The phone has two halves (called <em>leaves</em>, like the pages of a book). The <em>screen half</em> carries the big inner screen and the rear camera. The <em>keyboard half</em> (the <em>deck</em>) carries the cover screen and keys on its outside face.</p>
-
-    <div class="tables">
-      <table>
-        <caption>Overall</caption>
-        <tr><th>Height</th><td>123.9</td></tr>
-        <tr><th>Folded width (half + hinge)</th><td>78.4</td></tr>
-        <tr><th>Folded thickness, without camera</th><td>≈ 12.5</td></tr>
-        <tr><th>Folded thickness, with camera</th><td>≈ 15.5</td></tr>
-        <tr><th>Open width (flat)</th><td>153.0 (2 × 76.5)</td></tr>
-        <tr><th>Open thickness, keyboard half</th><td>≈ 7.0</td></tr>
-      </table>
-
-      <table>
-        <caption>Each half (leaf)</caption>
-        <tr><th>Width</th><td>76.5</td></tr>
-        <tr><th>Body thickness</th><td>5.4</td></tr>
-        <tr><th>Outer-edge corner radius</th><td>9.2</td></tr>
-        <tr><th>Hinge-side corner radius</th><td>1.6</td></tr>
-        <tr><th>Edge bevel</th><td>1.15</td></tr>
-        <tr><th>Back / face glass plate</th><td>0.26</td></tr>
-        <tr><th>Keyboard face plate (raised)</th><td>1.25</td></tr>
-      </table>
-
-      <table>
-        <caption>Cover screen (keyboard half, front)</caption>
-        <tr><th>Active area</th><td>69.7 × 80.0</td></tr>
-        <tr><th>Corner radius</th><td>6.3 (glass 7.1)</td></tr>
-        <tr><th>Glass border</th><td>+0.8 each side</td></tr>
-        <tr><th>Position</th><td class="wrap">centred, 3.6 below top edge</td></tr>
-        <tr><th>Front camera</th><td>punch-hole, top centre</td></tr>
-      </table>
-
-      <table>
-        <caption>Keyboard (keyboard half, front)</caption>
-        <tr><th>Layout</th><td>4 rows × 10 columns</td></tr>
-        <tr><th>Key cap</th><td>6.15 × 5.9</td></tr>
-        <tr><th>Key corner radius / height</th><td>2.3 / 1.05</td></tr>
-        <tr><th>Key spacing (centre to centre)</th><td>6.95</td></tr>
-        <tr><th>Row centres below device centre</th><td>27.8 · 34.8 · 41.8 · 48.8</td></tr>
-        <tr><th>Key tops below face plate</th><td>0.2</td></tr>
-        <tr><th>Pocket corner radius</th><td>3.6</td></tr>
-      </table>
-
-      <table>
-        <caption>Rear camera (screen half, back)</caption>
-        <tr><th>Camera island</th><td>25 × 47, r 8.5</td></tr>
-        <tr><th>Island stands proud by</th><td>1.8</td></tr>
-        <tr><th>Island centre</th><td class="wrap">17.5 in from free edge, 33.0 above centre</td></tr>
-        <tr><th>Lenses</th><td>3 × Ø8.4, pitch 12.6</td></tr>
-        <tr><th>Lens ring</th><td>Ø10.8, 1.25 high</td></tr>
-        <tr><th>Flash / sensor / mic</th><td>Ø3.4 / Ø2.3 / Ø0.8</td></tr>
-        <tr><th>Total camera bump</th><td>≈ 3.05</td></tr>
-      </table>
-
-      <table>
-        <caption>Side buttons (free edge, screen half)</caption>
-        <tr><th>Volume rocker</th><td>18 long, centre 36 above middle</td></tr>
-        <tr><th>Power / fingerprint</th><td>11 long, centre 14 above middle</td></tr>
-        <tr><th>Button width / radius</th><td>1.75 / 0.87</td></tr>
-        <tr><th>Stands proud of frame</th><td>0.2</td></tr>
-      </table>
-
-      <div>
-        <h3 style="margin-top:0">Hinge (spine)</h3>
-        <ul class="plain">
-          <li>Two pivots: each half turns about its own axis, 1.82 below the screen and 1.82 from the middle, on pins in the hinge's end plates. Each turns by half the opening angle.</li>
-          <li>Spine cover: brushed-metal shell, 0.5 wall. Shut, a flat-topped dome that adds 1.9 to the width; open, a 3.2 strip of it shows between the halves' back plates, flush with them. The halves' back edges stay a hairline (0.4 to 0.6) off it at every angle.</li>
-          <li>Inside: a steel centre beam and three modules. Each module is a steel housing with four detent springs and a cam; the middle one also has two rows of gears, which turn as the phone folds. Swing arms screwed to each half ride the cover's shoulders like rails.</li>
-          <li>Under the fold, grey wing plates tilt and a centre plate drops as the phone shuts, so the screen bends into a teardrop loop (1.4 radius) inside the hinge instead of a crease.</li>
-        </ul>
-        <h3>Inner screen</h3>
-        <ul class="plain">
-          <li>One continuous screen across both halves, 2.0 border all round.</li>
-          <li>Punch-hole selfie camera, Ø3.2, in the top-right corner of the right half: 5.5 from the right edge and 4.95 from the top, as on the Xiaomi 18 Fold.</li>
-          <li>Split at the fold: message list on the left, document on the right.</li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 style="margin-top:0">Ports and speakers</h3>
-        <ul class="plain">
-          <li>Earpiece slot above the cover screen: 10 × 0.7, over the top speaker.</li>
-          <li>Two speakers at opposite corners, as on the iPhone Duo. Top speaker in the keyboard half: 6-hole grille (Ø0.9) on its top edge. Bottom speaker in the screen half: 5-hole grille (Ø1.0) on its bottom edge.</li>
-          <li>Keyboard half's bottom edge: USB-C 8.6 × 2.7 and one mic (Ø0.9).</li>
-          <li>Mics (Ø0.9): one on each half's top edge, one on the screen half's bottom edge.</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ finishes ============ -->
-  <section id="finishes">
-    <p class="eyebrow">Finishes</p>
-    <h2>Five colourways</h2>
-    <p class="lede">Click one to apply it to the render at the top of the page.</p>
-    <div class="finishes">
-      <button class="finish" data-goto="porcelain"><div class="chips"><span style="background:#d9d8d5"></span><span style="background:#efece6"></span><span style="background:#34373c"></span></div><b>Porcelain</b><div class="hex">frame #d9d8d5 · face #efece6<br>keys #34373c</div></button>
-      <button class="finish" data-goto="graphite"><div class="chips"><span style="background:#5a5c60"></span><span style="background:#2c2d30"></span><span style="background:#1b1c1f"></span></div><b>Graphite</b><div class="hex">frame #5a5c60 · face #2c2d30<br>keys #1b1c1f</div></button>
-      <button class="finish" data-goto="sage"><div class="chips"><span style="background:#b3b8ad"></span><span style="background:#c2cabb"></span><span style="background:#2f352f"></span></div><b>Sage</b><div class="hex">frame #b3b8ad · face #c2cabb<br>keys #2f352f</div></button>
-      <button class="finish" data-goto="clay"><div class="chips"><span style="background:#c8b09d"></span><span style="background:#dbc6b4"></span><span style="background:#3b2f2a"></span></div><b>Clay</b><div class="hex">frame #c8b09d · face #dbc6b4<br>keys #3b2f2a</div></button>
-      <button class="finish" data-goto="cobalt"><div class="chips"><span style="background:#8290a2"></span><span style="background:#34465f"></span><span style="background:#18202c"></span></div><b>Cobalt</b><div class="hex">frame #8290a2 · face #34465f<br>keys #18202c</div></button>
-    </div>
-  </section>
-
   <footer class="disclaimer">
-    <p><strong>This is an unofficial design concept.</strong> It is not a Samsung, Clicks, Apple or Qualcomm product, and is not affiliated with or endorsed by any of them. Product names are used only to describe the design inspiration and the parts it is sized from. "iPhone Duo-style" describes the idea behind the opening animation; no Apple software or assets are used.</p>
-    <p>All geometry is generated in code. No manufacturer models or assets are used. Rendered with <a href="https://threejs.org/">three.js</a>.</p>
+    <p>Fold Communicator is an independent design concept. It is not a product for sale and is not affiliated with any phone or chip maker. Snapdragon is a trademark of Qualcomm.</p>
+    <p>Rendered in the browser with <a href="https://threejs.org/">three.js</a>. The pictures are stills of the same 3D model.</p>
   </footer>
 </main>
 
 <script src="parts.js"></script>
 <script>
-  /* draw the keyboard into the front-view drawing (front coords: x from the hinge edge of the leaf) */
+  /* draw the keyboard into the front-view drawing (front coords: x from the hinge edge of the half) */
   (function () {
     var g = document.getElementById("svgkeys"), NS = "http://www.w3.org/2000/svg";
     var L = 76.5, KW = 6.15, KH = 5.9, PX = 6.95, span = 9 * PX + KW, rows = [-27.8, -34.8, -41.8, -48.8];
@@ -648,32 +746,44 @@
     var widths = [KW, KW, KW, span - 6 * KW - 6 * (PX - KW), KW, KW, KW], fx = L / 2 - span / 2;
     widths.forEach(function (w) { add(fx + w / 2, rows[3], w); fx += w + (PX - KW); });
   })();
-  /* parts table and battery figures, written from parts.js so the page never disagrees with the model */
+  /* battery figures and the full parts list, written from parts.js so the page never disagrees with the model.
+     The list reads only each part's name, what, spec and size (plus group and skipTable to lay it out). */
+  (function () {
+    var D = window.FC_PARTS; if (!D) return;
+    var n = function (v) { return v.toLocaleString("en-GB"); };
+    var put = function (k, v) { document.querySelectorAll('[data-fc="' + k + '"]').forEach(function (e) { e.textContent = v; }); };
+    var cells = D.parts.filter(function (p) { return p.mAh; });
+    put("mAh", n(D.totalMAh)); put("wh", (D.totalMAh * D.cell.volts / 1000).toFixed(1)); put("cellA", n(cells[0].mAh)); put("cellB", n(cells[1].mAh));
+  })();
   (function () {
     var D = window.FC_PARTS; if (!D) return;
     var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
     var f = function (v) { return (Math.round(v * 100) / 100).toString(); };
     var size = function (p) { return p.rad ? "Ø" + f(p.rad * 2) + " × " + f(p.z[1] - p.z[0]) : f(p.x[1] - p.x[0]) + " × " + f(p.y[1] - p.y[0]) + " × " + f(p.z[1] - p.z[0]); };
-    var cells = D.parts.filter(function (p) { return p.mAh; }), n = function (v) { return v.toLocaleString("en-GB"); };
-    var put = function (k, v) { document.querySelectorAll('[data-fc="' + k + '"]').forEach(function (e) { e.textContent = v; }); };
-    put("mAh", n(D.totalMAh)); put("wh", (D.totalMAh * D.cell.volts / 1000).toFixed(1)); put("cellA", n(cells[0].mAh)); put("cellB", n(cells[1].mAh));
     var groups = {}, order = [];
     D.parts.forEach(function (p) { if (p.skipTable) return; if (!groups[p.group]) { groups[p.group] = []; order.push(p.group); } groups[p.group].push(p); });
     var html = "";
     order.forEach(function (g) {
-      html += '<tr class="grp"><th colspan="4">' + esc(g) + "</th></tr>";
+      html += '<tr class="grp"><th colspan="3">' + esc(g) + "</th></tr>";
       groups[g].forEach(function (p) {
-        var src = (p.src || []).map(function (k) { return '<a href="' + D.sources[k].u + '" target="_blank" rel="noopener">' + esc(D.sources[k].t) + "</a>"; }).join("<br>");
-        html += "<tr><th>" + esc(p.name) + (p.mAh ? "<br><small>" + n(p.mAh) + " mAh</small>" : "") + "</th><td>" + esc(p.what || "") +
-          (p.spec ? "<br><small>" + esc(p.spec) + "</small>" : "") + (p.note ? "<br><small>" + esc(p.note) + "</small>" : "") +
-          '</td><td class="mono">' + size(p) + '</td><td><span class="chip ' + p.tag.toLowerCase() + '">' + p.tag + "</span>" + (src ? "<br><small>" + src + "</small>" : "") + "</td></tr>";
+        html += "<tr><th>" + esc(p.name) + "</th><td>" + esc(p.what || "") + (p.spec ? "<br><small>" + esc(p.spec) + "</small>" : "") +
+          '</td><td class="mono">' + size(p) + "</td></tr>";
       });
     });
     document.querySelector("#parts-table tbody").innerHTML = html;
-    document.querySelectorAll("[data-mode]").forEach(function (b) {
-      b.addEventListener("click", function () { var m = document.getElementById("m-" + b.dataset.mode); if (m) m.click(); document.getElementById("viewer").scrollIntoView({ behavior: "smooth" }); });
-    });
   })();
+  /* buttons in the page that drive the render, then scroll up to it: data-mode presses a teardown step,
+     data-view goes back to the whole phone and presses a camera view */
+  document.querySelectorAll("[data-mode]").forEach(function (b) {
+    b.addEventListener("click", function () { var m = document.getElementById("m-" + b.dataset.mode); if (m) m.click(); document.getElementById("viewer").scrollIntoView({ behavior: "smooth" }); });
+  });
+  document.querySelectorAll("[data-view]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var w = document.getElementById("m-whole"), v = document.getElementById("v-" + b.dataset.view);
+      if (w) w.click(); if (v) v.click();
+      document.getElementById("viewer").scrollIntoView({ behavior: "smooth" });
+    });
+  });
   /* finish cards scroll up and apply the finish in the render */
   document.querySelectorAll("[data-goto]").forEach(function (b) {
     b.addEventListener("click", function () {

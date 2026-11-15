@@ -1,5 +1,5 @@
-/* Fold Communicator — internal parts. Geometry and words come from parts.js (window.FC_PARTS). Owner after B0: B2.
-   Built to BUILD-SPEC 6.5, with the looks from RC (research/RC-visual.md) and the keyboard stack from R3 §5.
+/* Fold Communicator — internal parts. Geometry and words come from parts.js (window.FC_PARTS). Each part is drawn
+   the way the real part looks in a phone teardown: foil, labels, tapes, screws and the keyboard's layered stack.
    Each parts.js entry becomes one host mesh (one material, so the part card can highlight it) in its half's group, at
    z = p.z[0]. Its small details (tapes, connectors, brackets, screws, lenses, domes...) are child meshes, so they move
    with it; mark() copies the part to every child, so clicking any piece opens the card. Child geometry is written in
@@ -113,9 +113,9 @@ function pair(T, wMm, hMm, size, fn, ormScale) {
 }
 
 /* ---------- part builders: each returns the host mesh ---------- */
-// pouch cell (RC §1): foil pouch with a printed label on both faces, PCM strip under black tape at the tab end, two
+// pouch cell: foil pouch with a printed label on both faces, PCM strip under black tape at the tab end, two
 // blue stretch-release pull tabs at the other end (flat on the back face, folded over the end edge), wrinkled edges
-// pouchMaps (B1) leaves room for five spec lines above its icon row, so the label has the brand line plus five
+// pouchMaps (materials.js) leaves room for five spec lines above its icon row, so the label has the brand line plus five
 function cellLabel(p) {
   return { brand: "Li-ion Polymer Battery", lines: [
     "Model " + (p.id === "battery-p" ? "FC-BA1" : "FC-BB1") + "   Lot " + (p.id === "battery-p" ? "2641A07" : "2641B12"),
@@ -354,7 +354,7 @@ function buildBracket(T, p, s, par, ctx) {
   return host;
 }
 
-// sealed speaker box (RC §5, Samsung style): black box, raised window showing the membrane, red gasket rim, screw ears
+// sealed speaker box: black box, raised window showing the membrane, red gasket rim, screw ears
 function buildSpeaker(T, p, s, par, ctx) {
   const g = G(T, s), z0 = p.z[0], cx = (p.x[0] + p.x[1]) / 2, cy = (p.y[0] + p.y[1]) / 2, ww = (p.x[1] - p.x[0]) * 0.7, wh = (p.y[1] - p.y[0]) * 0.7;
   const ears = p.id === "speaker-top" ? [[p.x[0] - 0.7, cy], [p.x[1] + 0.7, cy]] : [[p.x[1] + 0.7, cy + 2.5], [p.x[1] + 0.7, cy - 2.5]];
@@ -412,7 +412,7 @@ function buildOled(T, p, s, par, ctx) {
     const R = (x0, x1, y0, y1) => { const a = f(x0), b = f(x1); return [Math.min(a, b) * ppm, (h - (y1 - p.y[0])) * ppm, Math.abs(b - a) * ppm, (y1 - y0) * ppm]; };
     c.fillStyle = "#c8cbcf"; c.fillRect(0, 0, W, H); o.fillStyle = ORM(1, 0.45, 1); o.fillRect(0, 0, W, H);
     const tape = (r, col) => { c.fillStyle = col; c.fillRect(...r); o.fillStyle = ORM(1, 0.75, 0); o.fillRect(...r); };
-    tape(R(p.x[0], 8.0, p.y[0], p.y[1]), "#141518");                       // the fold stripe (RC §9)
+    tape(R(p.x[0], 8.0, p.y[0], p.y[1]), "#141518");                       // the fold stripe
     tape(R(14, 44, -50, -8), "#1d1e21"); tape(R(48, 70, 6, 46), "#1d1e21");   // adhesive sheets
     c.fillStyle = "#6b6f75"; for (let i = 0; i < 16; i++) { const y = p.y[0] + 4 + i * (h - 8) / 15, [x0, y0] = R(73.2, 73.2, y, y); c.beginPath(); c.arc(x0, y0, 0.3 * ppm, 0, 7); c.fill(); }
     void rnd;
@@ -433,7 +433,7 @@ function buildOled(T, p, s, par, ctx) {
   return host;
 }
 
-// cover OLED: rose-copper foil back with a black sheet stuck on it and a black border (RC §6, IFX-P10)
+// cover OLED: rose-copper foil back with a black sheet stuck on it and a black border
 function buildCoverOled(T, p, s, par, ctx) {
   const w = p.x[1] - p.x[0], h = p.y[1] - p.y[0];
   const set = pair(T, w, h, Q.tex.tiled[1], (c, o, W, H, ppm) => {
@@ -447,7 +447,7 @@ function buildCoverOled(T, p, s, par, ctx) {
   return ctx.mk(planUV(slab(T, p, s, 0.05, 1), p, s), matWith("copperFoil", set), par, false);
 }
 
-/* ---------- keyboard stack (R3 §5; RC §10): mat, light guide, domes, switch flex, steel backer ---------- */
+/* ---------- keyboard stack: mat, light guide, domes, switch flex, steel backer ---------- */
 const keyPos = () => (S.keys || []).map((k) => [k.x, k.y]);
 // silicone mat: a raised pad under each keycap on its outer side (the caps are glued to these), an actuator nub under
 // each key on its inner side
@@ -533,7 +533,7 @@ export function partBox(p, ctx) {
   // anchors: the part's centre, on the outer and inner faces of the box round the part and its details
   const box = new T.Box3(), b = new T.Box3(); m.updateMatrixWorld(true);
   // (an instanced child's box comes from its instances: its geometry's own box is one copy at the origin, which put the
-  // dome sheet's inner anchor 5 mm off the sheet, G2-19)
+  // dome sheet's inner anchor 5 mm off the sheet)
   m.traverse((o) => { if (!o.geometry) return;
     if (o.isInstancedMesh) { o.computeBoundingBox(); b.copy(o.boundingBox); } else { o.geometry.computeBoundingBox(); b.copy(o.geometry.boundingBox); }
     if (o !== m) b.translate(o.position); box.union(b); });
@@ -547,7 +547,7 @@ export function partBox(p, ctx) {
 export function buildInternals(ctx) {
   const D = window.FC_PARTS; if (!D) return;
   D.parts.forEach((p) => {
-    if (p.render === "flex") return;   // ribbons: js/teardown.js draws them from FC_PARTS.flexes (B5)
+    if (p.render === "flex") return;   // ribbons: js/teardown.js draws them from FC_PARTS.flexes
     const m = p.leaf === "spine" ? ctx.spinePart(p, ctx) : ctx.partBox(p, ctx);
     if (!m) return;
     let [a0, a1] = m.userData.anchors || [];

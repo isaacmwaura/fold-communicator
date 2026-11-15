@@ -1,6 +1,6 @@
-/* Fold Communicator — start-up, and the shot hooks build/shoot.py drives (BUILD-SPEC 5.1, 5.3).
+/* Fold Communicator — start-up, and the shot hooks build/shoot.py drives.
    Model units are millimetres. Origin is the device centre, Y is up.
-   In front view the hinge is on the left and the device opens like a book. Frozen after B0. */
+   In front view the hinge is on the left and the device opens like a book. */
 import * as THREE from "three";
 import { props, S, Q, BUDGET, PERF_BUDGET, params, views, SHOTS, MODE_CAM, addUpdater, addAfterRender, afterRender, invalidate } from "./state.js";
 import { $, texBytes } from "./util.js";
@@ -78,7 +78,7 @@ function snapAll() {
   invalidate();
 }
 
-// URL parameters (BUILD-SPEC 5.3), applied once after the build, through the page's own controls where there is one
+// URL parameters, applied once after the build, through the page's own controls where there is one
 function applyParams() {
   const P = params, on = (k) => P[k] === "1";
   const click = (sel) => { const b = document.querySelector(sel); if (b) b.click(); };
@@ -121,7 +121,7 @@ FC.setView = async (name) => {
   FC.ready = true; html.setAttribute("data-fc-ready", "1");
 };
 
-/* ---------- __fc.perf: the frame cost of one mode move, made the way a person makes it (FABLE-REVIEW-1 F11, WP0) ----------
+/* ---------- __fc.perf: the frame cost of one mode move, made the way a person makes it ----------
    From Hero (closed, Whole, labels on), press the mode button btnId ("m-explode", "m-back", "m-screens") and watch
    PERF_BUDGET.windowMs: frames drawn, and the longest main-thread task (Chrome's own 'longtask' report). Once the move
    has come to rest, time the label layout (the after-render step) and read draw calls and triangles. Needs a page
@@ -190,7 +190,7 @@ async function start() {
   // the contact shadow's casters, then shader programs and textures for every part, hidden ones included (scene.js)
   shadowCasters();
   await warmUp();
-  // per-frame order: camera easing, teardown easing, Duo effect, focus; then render; then label layout
+  // per-frame order: camera easing, teardown easing, screen hand-over, focus; then render; then label layout
   addUpdater(updateCamera); addUpdater(updateTeardown); addUpdater(updateDuo); addUpdater(updateFocus);
   addAfterRender(layoutLabels);
   applyParams();
@@ -221,7 +221,7 @@ const wait = () => {
     let gl = null; try { gl = S.ren && S.ren.getContext(); } catch (e) { /* no context */ }
     if (!gl) { $("nogl").hidden = false; return; }
     // the libraries loaded and WebGL works, so the build itself failed (a bad parts.js edit, say): say what broke,
-    // not "could not load the 3D libraries" (F13). index.html keeps this text if its 10 s check fires later.
+    // not "could not load the 3D libraries". index.html keeps this text if its 10 s check fires later.
     const m = $("noload"); m.textContent = "The 3D view could not start: " + ((err && err.message) || err) + ". The dimension sheet below still works.";
     m.dataset.fcText = "1"; m.hidden = false;
   });

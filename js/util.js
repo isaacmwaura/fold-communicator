@@ -8,7 +8,7 @@ export function rr(g, x, y, w, h, r) { r = Math.min(r, h / 2, w / 2); g.beginPat
 /* ---------- textures: every one is made here, so the page can report texture memory ---------- */
 const liveTex = new Set(), targets = new Set();
 // o.color: true for colour pictures (map, emissiveMap: sRGB), false for data maps (bump, roughness...: no colour space)
-// o.aniso: anisotropic filtering samples. Default by map type (FABLE-REVIEW-1 F2): 8 for colour pictures, where
+// o.aniso: anisotropic filtering samples. Default by map type: 8 for colour pictures, where
 // printing and labels must stay sharp at a slant; 4 for data maps (relief, roughness), whose blur at a slant shows as
 // a slightly softer sheen; 2 for every map at Low. Each step up costs texture reads on every pixel that uses the map.
 // Never more than the GPU offers.
@@ -71,7 +71,7 @@ export function ext(T, shape, depth, bev, segs, curve) {
   g.translate(0, 0, bev); return g;
 }
 /* Segments per rounded corner for an outline whose largest corner radius is r (mm): about 4 per mm, 8 to 28. A 28-step
-   corner on a 1 mm screw hole cost as many triangles as a battery (FABLE-REVIEW-1 F2: the light-guide film's 37 key
+   corner on a 1 mm screw hole cost as many triangles as a battery (the light-guide film's 37 key
    holes alone were 34k triangles). At 8 steps a 2 mm corner is off a true arc by 0.02 mm, far below a pixel at the
    closest still, while the big corners (the halves' 9.2 mm, the mid-frames' 7 mm) keep all 28. */
 export const curveSegs = (r) => Math.max(8, Math.min(28, Math.round((r || 0) * 4)));
@@ -94,3 +94,14 @@ export function flatUV(geo, fn) { const p = geo.attributes.position, uv = geo.at
 // smoothstep
 export const sm = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
 export const fmt = (v) => (Math.round(v * 100) / 100).toString();
+// a closed section [x, z], its points anticlockwise, each edge (pts[i] to pts[i + 1]) moved in by d[i]: each point to
+// where its two moved edges meet (a mitre). Sound while no edge closes up
+export function insetLoop(pts, d) {
+  const n = pts.length;
+  return pts.map((q, i) => { const a = pts[(i + n - 1) % n], b = pts[(i + 1) % n], d1 = d[(i + n - 1) % n], d2 = d[i];
+    const l1 = Math.hypot(q[0] - a[0], q[1] - a[1]), l2 = Math.hypot(b[0] - q[0], b[1] - q[1]);
+    // each edge's inward normal (left of its run); the point v on both moved edges: v·n1 = d1, v·n2 = d2
+    const n1 = [-(q[1] - a[1]) / l1, (q[0] - a[0]) / l1], n2 = [-(b[1] - q[1]) / l2, (b[0] - q[0]) / l2], det = n1[0] * n2[1] - n1[1] * n2[0];
+    if (Math.abs(det) < 1e-6) return [q[0] + d2 * n2[0], q[1] + d2 * n2[1]];   // (two edges in one line)
+    return [q[0] + (d1 * n2[1] - d2 * n1[1]) / det, q[1] + (n1[0] * d2 - n2[0] * d1) / det]; });
+}
